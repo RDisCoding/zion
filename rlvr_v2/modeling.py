@@ -13,8 +13,9 @@ import contextlib
 import functools
 import gc
 import logging
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import torch
 
@@ -197,8 +198,8 @@ def _gradient_checkpointing_kwargs(model) -> dict | None:
             fn = getattr(module, "_gradient_checkpointing_func", None)
             if isinstance(fn, functools.partial):
                 return dict(fn.keywords or {})
-    except Exception:  # pragma: no cover - purely defensive
-        pass
+    except (AttributeError, TypeError, RuntimeError) as e:  # pragma: no cover - purely defensive
+        log.debug("could not inspect gradient checkpointing kwargs: %r", e)
     return None
 
 

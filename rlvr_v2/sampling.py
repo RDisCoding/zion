@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Protocol, Sequence, runtime_checkable
+from collections.abc import Sequence
+from typing import Any, Protocol, runtime_checkable
 
 import torch
 
@@ -44,7 +45,7 @@ def postprocess_sequence(generated_ids: Sequence[int], stop_ids: Sequence[int]) 
     """
     if hasattr(generated_ids, "tolist"):
         generated_ids = generated_ids.tolist()
-    stops = set(int(s) for s in stop_ids)
+    stops = {int(s) for s in stop_ids}
     for i, tok in enumerate(generated_ids):
         if int(tok) in stops:
             return [int(t) for t in generated_ids[:i]], "stop"
