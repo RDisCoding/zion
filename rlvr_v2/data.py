@@ -64,11 +64,15 @@ def parse_level(x) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def _row_to_problem(row: dict, source: str, idx: int) -> Problem:
+def _row_to_problem(row: dict, source: str, idx: int, strict: bool = True) -> Problem | None:
+    """Map a dataset row to a Problem. Rows without a usable `answer` are rejected (strict) or skipped
+    (non-strict); we never re-parse the answer from the solution text."""
     uid = row.get("unique_id") or f"{source}/{idx}"
     answer = row.get("answer")
     if answer is None or str(answer).strip() == "":
-        raise ValueError(f"{source} row {uid} has no `answer` column; refusing to re-parse solution text")
+        if strict:
+            raise ValueError(f"{source} row {uid} has no `answer` column; refusing to re-parse solution text")
+        return None
     return Problem(
         unique_id=str(uid),
         problem=str(row["problem"]),
@@ -82,10 +86,21 @@ def _row_to_problem(row: dict, source: str, idx: int) -> Problem:
 
 # ---------------------------------------------------------------------- loaders
 def load_math_train(name: str = "nlile/hendrycks-MATH-benchmark") -> list[Problem]:
+    """Train split; rows without an `answer` value are skipped (counted in the module logger)."""
+    import logging
+
     from datasets import load_dataset
 
     ds = load_dataset(name, split="train")
-    return [_row_to_problem(r, "math_train", i) for i, r in enumerate(ds)]
+    out, skipped = [], 0
+    for i, r in enumerate(ds):
+        p = _row_to_problem(r, "math_train", i, strict=False)
+        if p is None:
+            skipped += 1
+        else:
+            out.append(p)
+    logging.getLogger(__name__).info("%s train: %d problems kept, %d skipped (no answer column)", name, len(out), skipped)
+    return out
 
 
 def load_math500(name: str = "HuggingFaceH4/MATH-500") -> list[Problem]:
@@ -214,6 +229,8 @@ def make_splits(cfg: DataCfg, train: list[Problem], math500: list[Problem]) -> d
     near-duplicates of MATH-500; held-out = the next `heldout_size`. Returns manifests (not saved)."""
     import random
 
+    if cfg.id_prefix:
+        train = [p for p in train if p.unique_id.startswith(cfg.id_prefix)]
     rng = random.Random(cfg.shuffle_seed)
     order = list(range(len(train)))
     rng.shuffle(order)
@@ -227,9 +244,9 @@ def make_splits(cfg: DataCfg, train: list[Problem], math500: list[Problem]) -> d
     manifests = {
         "math500": build_manifest(math500, "math500", "math500", dataset=cfg.eval_dataset),
         "pool": build_manifest(pool, "pool", "math_train", dataset=cfg.train_dataset, shuffle_seed=cfg.shuffle_seed,
-                               removed_near_duplicates=dups),
+                               id_prefix=cfg.id_prefix, n_source_rows=len(train), removed_near_duplicates=dups),
         "heldout": build_manifest(heldout, "heldout", "math_train", dataset=cfg.train_dataset,
-                                  shuffle_seed=cfg.shuffle_seed),
+                                  shuffle_seed=cfg.shuffle_seed, id_prefix=cfg.id_prefix),
     }
     assert_disjoint(*manifests.values())
     return manifests

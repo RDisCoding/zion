@@ -118,6 +118,9 @@ class DataCfg:
     pool_size: int = 500
     heldout_size: int = 500
     near_dup_ratio: float = 0.9
+    # The nlile "train" split also packages the non-MATH-500 part of the MATH test set (ids "test/...").
+    # Keep only genuine MATH train problems so "candidates from the train split" is literally true.
+    id_prefix: str | None = "train/"
 
 
 @dataclass(frozen=True)
