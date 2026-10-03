@@ -67,8 +67,13 @@ class Signals:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Signals":
+        """Inverse of to_dict(); JSON nulls for the float fields that may be undefined become NaN."""
         names = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in d.items() if k in names})
+        out = {k: v for k, v in d.items() if k in names}
+        for k in ("d_wrong", "len_correct_mean", "len_wrong_mean", "d_simpson", "entropy_bits", "entropy_mm"):
+            if k in out and out[k] is None:
+                out[k] = float("nan")
+        return cls(**out)
 
 
 NUMERIC_FEATURES: tuple[str, ...] = (

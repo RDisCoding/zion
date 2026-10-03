@@ -60,10 +60,22 @@ def stop_strings(style: str) -> list[str]:
 def resolve_stop_token_ids(tokenizer, style: str) -> list[int]:
     """Primary stop first. Chat styles end turns with <|im_end|>; the base tokenizer's eos is <|endoftext|>."""
     ids: list[int] = []
+    vocab = None
     for s in stop_strings(style):
         tid = tokenizer.convert_tokens_to_ids(s)
-        if tid is not None and tid != getattr(tokenizer, "unk_token_id", None) and tid not in ids:
-            ids.append(int(tid))
+        if tid is None or tid in ids:
+            continue
+        # A token that is genuinely in the vocabulary may legitimately share its id with unk (SmolLM2's
+        # <|endoftext|> is id 0 == unk), so check vocabulary membership instead of comparing with unk_token_id.
+        if tid == getattr(tokenizer, "unk_token_id", None):
+            if vocab is None:
+                try:
+                    vocab = tokenizer.get_vocab()
+                except Exception:  # pragma: no cover - fake tokenizers in tests
+                    vocab = {}
+            if s not in vocab:
+                continue
+        ids.append(int(tid))
     if tokenizer.eos_token_id is not None and tokenizer.eos_token_id not in ids:
         ids.append(int(tokenizer.eos_token_id))
     return ids

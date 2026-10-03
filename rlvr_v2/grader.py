@@ -96,8 +96,13 @@ class MathVerifyGrader:
         self.timeout_s = None if os.name == "nt" else timeout_s
         self.float_rounding = float_rounding
         try:
+            import logging
+
             from math_verify import parse, verify  # type: ignore
 
+            if self.timeout_s is None:  # math-verify warns on every call when timeouts are disabled (Windows)
+                for name in ("math_verify", "math_verify.parser", "math_verify.grader", "math_verify.utils"):
+                    logging.getLogger(name).setLevel(logging.ERROR)
             self._parse, self._verify = parse, verify
         except Exception:  # pragma: no cover - exercised only when math-verify is missing
             self._parse = self._verify = None

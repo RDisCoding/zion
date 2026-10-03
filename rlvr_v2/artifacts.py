@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 import os
 import platform
 import socket
@@ -64,7 +65,7 @@ def atomic_write_json(path: str | Path, obj: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(obj, fh, indent=1, default=str)
+        json.dump(_json_safe(obj), fh, indent=1, default=str, allow_nan=False)
     os.replace(tmp, path)
 
 
@@ -76,6 +77,17 @@ def read_json(path: str | Path, default: Any = None) -> Any:
         return json.load(fh)
 
 
+def _json_safe(obj: Any) -> Any:
+    """Replace NaN/inf floats by None recursively so JSONL stays standard JSON (jq/pyarrow-readable)."""
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 class JsonlWriter:
     def __init__(self, path: str | Path, append: bool = True):
         self.path = Path(path)
@@ -83,7 +95,7 @@ class JsonlWriter:
         self._fh = open(self.path, "a" if append else "w", encoding="utf-8")
 
     def write(self, record: dict) -> None:
-        self._fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        self._fh.write(json.dumps(_json_safe(record), ensure_ascii=False, default=str, allow_nan=False) + "\n")
         self._fh.flush()
 
     def close(self) -> None:
