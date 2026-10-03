@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rlvr_v2"
+version = "0.1.0"
+description = "Pre-registered re-examination of example selection for 1-shot RLVR (Qwen2.5-Math-1.5B, GRPO, MATH)"
+requires-python = ">=3.10"
+dependencies = [
+  "torch>=2.4",
+  "transformers>=4.51",
+  "trl>=0.19",
+  "peft>=0.15",
+  "datasets>=3.0",
+  "accelerate>=1.0",
+  "math-verify>=0.7",
+  "antlr4-python3-runtime==4.13.2",
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "pyarrow>=15",
+  "scipy>=1.11",
+  "scikit-learn>=1.4",
+  "pyyaml>=6",
+  "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+vllm = ["vllm>=0.8"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+rlvr_v2 = "rlvr_v2.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["rlvr_v2*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["smoke: end-to-end CPU smoke test with a tiny model (slow)"]
+addopts = "-m 'not smoke'"
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"

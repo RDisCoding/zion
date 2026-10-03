@@ -1,0 +1,45 @@
+# CPU smoke test: tiny model, tiny lengths. Checks plumbing and record schemas, not accuracy.
+run:
+  tag: smoke
+  require_gates: false
+model:
+  name: HuggingFaceTB/SmolLM2-135M-Instruct
+  dtype: fp32
+  quant: none
+  lora: {r: 8, alpha: 16, dropout: 0.0, target_modules: [q_proj, k_proj, v_proj, o_proj]}
+gen:
+  max_prompt_tokens: 256
+  max_new_tokens: 48
+  sieve: {temperature: 1.0, top_p: 1.0, n: 4}
+  eval:  {temperature: 0.0, top_p: 1.0, n: 1}
+  backend: hf
+  hf_batch_size: 8
+train:
+  rounds: 2
+  num_generations: 4
+  per_device_train_batch_size: 4
+  gradient_checkpointing: false
+  save_rounds: 1
+  guard: {max_clipped_ratio: 1.0, check_steps: 0, preflight: false}
+data:
+  pool_size: 8
+  heldout_size: 4
+eval:
+  max_items: 5
+  bootstrap_samples: 200
+study1:
+  k_sieve: 4
+  pairs_per_bin: [1, 1, 1]
+  n_null_anchors: 1
+  n_zero_anchors: 1
+  replicate_count: 1
+  max_ps_diff: 0.5
+  min_dwrong_gap: 0.0
+study2:
+  steps: 1
+  batch_b: 3
+  k: 4
+  rounds_per_burst: 2
+  eval_every: 1
+  arms: [random]
+  seeds: [0]

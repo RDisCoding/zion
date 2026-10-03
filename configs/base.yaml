@@ -1,0 +1,101 @@
+# Base configuration: every study config is merged on top of this file.
+# GenerationCfg is the single owner of lengths/decoding for sieve, train and eval.
+run:
+  results_root: results
+  tag: dev
+  seed: 0
+  require_gates: true
+
+model:
+  name: Qwen/Qwen2.5-Math-1.5B
+  dtype: bf16          # bf16 | fp16 | fp32  (CPU smoke overrides to fp32)
+  quant: none          # none | nf4 (nf4 forbids vLLM)
+  attn_impl: sdpa
+  lora:
+    r: 32
+    alpha: 64
+    dropout: 0.0
+    target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+prompt:
+  style: qwen_math_chat   # pinned after E0 gate G1 compares qwen_math_chat vs oneshot_rlvr_chat
+  system: "Please reason step by step, and put your final answer within \\boxed{}."
+
+gen:
+  max_prompt_tokens: 1024
+  max_new_tokens: 3072     # pre-registered switch: 2048 if E0 truncation < 2%
+  sieve: {temperature: 1.0, top_p: 1.0, n: 32}   # n == K for Study 1
+  eval:  {temperature: 0.0, top_p: 1.0, n: 1}    # greedy
+  backend: hf              # hf | vllm (vllm is optional/time-boxed on the cluster)
+  hf_batch_size: 32
+  vllm_gpu_memory_utilization: 0.85
+
+train:
+  rounds: 100              # generation rounds == optimizer steps (one prompt x G completions per round)
+  num_generations: 64      # G
+  per_device_train_batch_size: 8   # grad_accum = G / pdbs; lower pdbs on small shards
+  learning_rate: 2.0e-5
+  lr_scheduler_type: constant
+  warmup_steps: 0
+  beta: 0.0
+  loss_type: dapo
+  scale_rewards: group
+  epsilon: 0.2
+  num_iterations: 1
+  mask_truncated_completions: true
+  gradient_checkpointing: true
+  reward_weights: [[correctness, 1.0], [format, 0.0]]   # format is a zero-weight probe (logging only)
+  use_vllm: false
+  vllm_mode: colocate
+  vllm_gpu_memory_utilization: 0.35
+  save_rounds: 25
+  logging_steps: 1
+  guard: {max_clipped_ratio: 0.20, check_steps: 3, preflight: true}
+
+data:
+  train_dataset: nlile/hendrycks-MATH-benchmark
+  eval_dataset: HuggingFaceH4/MATH-500
+  shuffle_seed: 20260101
+  pool_size: 500
+  heldout_size: 500
+  near_dup_ratio: 0.9
+
+eval:
+  manifest: manifests/math500.json
+  max_items: null
+  bootstrap_samples: 2000
+  store_text: true
+
+selector:
+  name: random
+  disagreement_metric: d_simpson
+  ps_lo: 0.2
+  ps_hi: 0.8
+  ps_target: 0.5
+  learned_path: null
+
+study1:
+  k_sieve: 32
+  pool_manifest: manifests/pool.json
+  candidates_manifest: manifests/study1_candidates.json
+  heldout_manifest: manifests/heldout.json
+  pairs_per_bin: [4, 6, 4]
+  bins: [[0.0, 0.25], [0.25, 0.75], [0.75, 0.9]]
+  n_null_anchors: 2
+  n_zero_anchors: 2
+  max_ps_diff: 0.0625
+  min_dwrong_gap: 0.4
+  replicate_count: 8
+  replicate_seed_offset: 100000
+  seed_base: 1000
+
+study2:
+  steps: 20
+  batch_b: 16
+  k: 32                    # must equal gen.sieve.n; study2.yaml sets both to 16
+  rounds_per_burst: 10
+  eval_every: 4
+  arms: [random, variance, disagreement]
+  seeds: [1234, 2345, 3456]
+  pool_manifest: manifests/pool.json
+  repeat_one_uid: null

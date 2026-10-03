@@ -1,0 +1,21 @@
+# Study 2: sequential curriculum with matched baselines. Merge: base.yaml <- study2.yaml <- overrides.
+run:
+  tag: s2
+gen:
+  sieve: {temperature: 1.0, top_p: 1.0, n: 16}   # online sieve uses K=16 (cost); report K16-vs-K32 agreement
+train:
+  rounds: 10            # unused directly; study2.rounds_per_burst drives bursts
+  learning_rate: 2.0e-5
+selector:
+  name: random          # overridden per arm by the CLI (--arm)
+  disagreement_metric: d_simpson
+  learned_path: configs/selectors/learned_v1.json   # only used if the learned arm is enabled by the Study-1 gate
+study2:
+  steps: 20
+  batch_b: 16
+  k: 16
+  rounds_per_burst: 10  # 20 x 10 = 200 optimizer steps per run, identical for every arm
+  eval_every: 4
+  arms: [random, variance, disagreement]
+  seeds: [1234, 2345, 3456]
+  repeat_one_uid: oneshot/pi1

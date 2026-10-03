@@ -1,0 +1,16 @@
+# Study 1: per-example transfer (signals -> Delta MATH-500). Merge: base.yaml <- study1.yaml <- overrides.
+run:
+  tag: s1
+gen:
+  sieve: {temperature: 1.0, top_p: 1.0, n: 32}
+train:
+  rounds: 100          # frozen by the E0 positive-control ladder: {100, 2e-5} -> {100, 5e-5} -> {200, 5e-5}
+  learning_rate: 2.0e-5
+study1:
+  k_sieve: 32
+  pairs_per_bin: [4, 6, 4]
+  n_null_anchors: 2
+  n_zero_anchors: 2
+  replicate_count: 8
+study2:
+  k: 32                # keep validator happy (unused in Study 1)

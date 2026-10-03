@@ -1,0 +1,11 @@
+# E0 infrastructure gates (base evals, grader cross-check, truncation/stop-token check, positive control).
+run:
+  tag: e0
+  require_gates: false
+gen:
+  sieve: {temperature: 1.0, top_p: 1.0, n: 8}    # G3 stop-token check uses K=8 on 32 pool problems
+train:
+  rounds: 100           # positive-control rung 1; the gate script walks the ladder
+  learning_rate: 2.0e-5
+study2:
+  k: 8
