@@ -43,13 +43,21 @@ def postprocess_sequence(generated_ids: Sequence[int], stop_ids: Sequence[int]) 
     "length" otherwise (the sequence ran into `max_new_tokens`). Right padding after a stop id is
     discarded automatically because it comes after the cut.
     """
+    kept, reason, _ = postprocess_sequence_ex(generated_ids, stop_ids)
+    return kept, reason
+
+
+def postprocess_sequence_ex(generated_ids: Sequence[int], stop_ids: Sequence[int]) -> tuple[list[int], str, int | None]:
+    """Like `postprocess_sequence` but also returns the stop token id that ended the sequence (None when
+    the sequence ran into the length cap). Needed to measure how often the secondary stop token fires,
+    because TRL only recognises the tokenizer's single EOS when masking truncated completions."""
     if hasattr(generated_ids, "tolist"):
         generated_ids = generated_ids.tolist()
     stops = {int(s) for s in stop_ids}
     for i, tok in enumerate(generated_ids):
         if int(tok) in stops:
-            return [int(t) for t in generated_ids[:i]], "stop"
-    return [int(t) for t in generated_ids], "length"
+            return [int(t) for t in generated_ids[:i]], "stop", int(tok)
+    return [int(t) for t in generated_ids], "length", None
 
 
 def is_oom_error(exc: BaseException) -> bool:
@@ -173,16 +181,17 @@ class HFSampler:
                     chunk_size = new_size
                     modeling.free_cuda()
                     continue
-                kept_lists, reasons = [], []
+                kept_lists, reasons, stop_hits = [], [], []
                 for row in rows:
-                    kept, reason = postprocess_sequence(row, self.stop_token_ids)
+                    kept, reason, sid = postprocess_sequence_ex(row, self.stop_token_ids)
                     kept_lists.append(kept)
                     reasons.append(reason)
+                    stop_hits.append(sid)
                 texts = self.tokenizer.batch_decode(kept_lists, skip_special_tokens=True)
                 chunk_steps = 0
-                for (pi, ri), kept, reason, text in zip(chunk, kept_lists, reasons, texts):
+                for (pi, ri), kept, reason, sid, text in zip(chunk, kept_lists, reasons, stop_hits, texts):
                     results[pi][ri] = Rollout(text=text, n_tokens=len(kept), truncated=(reason == "length"),
-                                              finish_reason=reason)
+                                              finish_reason=reason, stop_id=sid)
                     produced = len(kept) + (1 if reason == "stop" else 0)  # the stop token was generated too
                     generated_tokens += produced
                     chunk_steps = max(chunk_steps, produced)
@@ -283,10 +292,12 @@ class VLLMSampler:
                 reason = "length" if raw_reason == "length" else ("stop" if raw_reason == "stop" else str(raw_reason))
                 ids = list(o.token_ids)
                 generated_tokens += len(ids)
+                sid = None
                 if reason == "stop" and ids and ids[-1] in stops:
+                    sid = int(ids[-1])
                     ids = ids[:-1]  # count kept tokens only, like HFSampler
                 rollouts.append(Rollout(text=o.text, n_tokens=len(ids), truncated=(reason != "stop"),
-                                        finish_reason=reason))
+                                        finish_reason=reason, stop_id=sid))
             if len(rollouts) != n:
                 raise RuntimeError(f"vLLM returned {len(rollouts)} completions for a prompt, expected {n}")
             results.append(rollouts)

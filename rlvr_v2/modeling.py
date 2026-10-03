@@ -162,14 +162,15 @@ def attach_fresh_lora(model, cfg: Config):
     return peft_model
 
 
-def load_adapter(base_model, adapter_dir: str | Path):
-    """Attach a saved (frozen) LoRA adapter to `base_model`."""
+def load_adapter(base_model, adapter_dir: str | Path, is_trainable: bool = False):
+    """Attach a saved LoRA adapter to `base_model` (frozen by default; `is_trainable=True` for resuming
+    a curriculum so the LoRA weights keep requires_grad)."""
     from peft import PeftModel
 
     adapter_dir = Path(adapter_dir)
     if not adapter_dir.exists():
         raise FileNotFoundError(f"adapter directory not found: {adapter_dir}")
-    model = PeftModel.from_pretrained(base_model, str(adapter_dir), is_trainable=False)
+    model = PeftModel.from_pretrained(base_model, str(adapter_dir), is_trainable=is_trainable)
     meta = load_adapter_meta(adapter_dir)
     log.info("loaded adapter %s (meta: %s)", adapter_dir, meta or "none")
     return model

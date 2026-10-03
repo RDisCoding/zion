@@ -27,6 +27,7 @@ THRESHOLDS = {
     "g1_acc_max": 0.95,
     "g3_trunc_rate_max": 0.10,
     "g3_format_rate_min": 0.90,
+    "g3_secondary_stop_max": 0.05,
     "g4_min_gain_points": 3.0,
     "g4_train_reward_min": 0.8,
     "g5_min_item_agreement": 0.98,
@@ -141,10 +142,25 @@ def gate_g3(ctx: _Ctx) -> dict:
     fmt = sum(s.format_rate for s in sig) / len(sig)
     none_rate = sum(s.none_rate for s in sig) / len(sig)
     len_mean = sum(s.len_mean for s in sig) / len(sig)
-    passed = trunc <= THRESHOLDS["g3_trunc_rate_max"] and fmt >= THRESHOLDS["g3_format_rate_min"]
+    # Which stop token ended each rollout: TRL masks completions that do not end with the tokenizer's
+    # single EOS (<|im_end|> for chat styles), so a large secondary-stop share would silently shrink the
+    # training signal and inflate completions/clipped_ratio.
+    from .artifacts import read_jsonl
+    from .prompts import resolve_stop_token_ids
+
+    stop_ids = resolve_stop_token_ids(tok, style)
+    rows = [r for r in read_jsonl(ctx.out_root / "g3" / "rollouts.jsonl") if r.get("policy_tag") == "base"]
+    counts: dict[str, int] = {}
+    for r in rows:
+        counts[str(r.get("stop_id"))] = counts.get(str(r.get("stop_id")), 0) + 1
+    n_rows = max(1, len(rows))
+    secondary_share = sum(v for k, v in counts.items() if k not in (str(stop_ids[0]), "None")) / n_rows
+    passed = (trunc <= THRESHOLDS["g3_trunc_rate_max"] and fmt >= THRESHOLDS["g3_format_rate_min"]
+              and secondary_share <= THRESHOLDS["g3_secondary_stop_max"])
     return {"passed": bool(passed), "style": style, "n_problems": len(sig), "k": cfg_s.gen.sieve.n,
             "trunc_rate": trunc, "format_rate": fmt, "none_rate": none_rate, "mean_completion_tokens": len_mean,
-            "p_s_mean": sum(s.p_s for s in sig) / len(sig)}
+            "p_s_mean": sum(s.p_s for s in sig) / len(sig), "stop_token_ids": stop_ids,
+            "stop_id_counts": counts, "secondary_stop_share": secondary_share}
 
 
 def gate_g5(ctx: _Ctx) -> dict:

@@ -30,6 +30,7 @@ class Rollout:
     correct: bool | None = None
     answer_class: int | None = None
     finish_reason: str = "stop"
+    stop_id: int | None = None  # which stop token ended the sequence (None if truncated/unknown)
 
 
 @dataclass(frozen=True)
@@ -110,10 +111,11 @@ def grade_rollouts(rollouts: Sequence[Rollout], gold: str, grader: MathVerifyGra
     graded = []
     for r in rollouts:
         g = grader.grade(r.text, gold, truncated=r.truncated)
-        graded.append(Rollout(r.text, r.n_tokens, r.truncated, g.boxed, g.correct, None, r.finish_reason))
+        graded.append(Rollout(r.text, r.n_tokens, r.truncated, g.boxed, g.correct, None, r.finish_reason, r.stop_id))
     preds = [r.boxed if (r.boxed and not r.truncated) else None for r in graded]
     classes = cluster_answers(preds, grader)
-    return [Rollout(r.text, r.n_tokens, r.truncated, r.boxed, r.correct, c, r.finish_reason) for r, c in zip(graded, classes)]
+    return [Rollout(r.text, r.n_tokens, r.truncated, r.boxed, r.correct, c, r.finish_reason, r.stop_id)
+            for r, c in zip(graded, classes)]
 
 
 def compute_signals(

@@ -178,10 +178,19 @@ def spearman_ci(x, y, n_boot: int = 2000, seed: int = 0, alpha: float = 0.05) ->
     return out
 
 
-def _partial_rank_corr(x: np.ndarray, y: np.ndarray, C: np.ndarray, rank_controls: bool) -> float:
+def _control_design(C: np.ndarray, rank_controls: bool, degree: int) -> np.ndarray:
+    """[1, controls] design. With ``rank_controls`` every control column is replaced by its scaled
+    average rank in (0, 1) and the powers 1..degree of each ranked column are appended."""
+    n = C.shape[0]
+    if rank_controls:
+        R = (sps.rankdata(C, axis=0) - 0.5) / n
+        cols = [R**d for d in range(1, degree + 1)]
+        return np.column_stack([np.ones(n)] + cols)
+    return np.column_stack([np.ones(n), C])
+
+
+def _partial_rank_corr(x: np.ndarray, y: np.ndarray, D: np.ndarray) -> float:
     rx, ry = sps.rankdata(x), sps.rankdata(y)
-    Cr = sps.rankdata(C, axis=0) if rank_controls else C
-    D = np.column_stack([np.ones(x.size), Cr])
     bx, *_ = np.linalg.lstsq(D, rx, rcond=None)
     by, *_ = np.linalg.lstsq(D, ry, rcond=None)
     ex, ey = rx - D @ bx, ry - D @ by
@@ -190,17 +199,23 @@ def _partial_rank_corr(x: np.ndarray, y: np.ndarray, C: np.ndarray, rank_control
 
 
 def partial_spearman(x, y, controls: np.ndarray, n_boot: int = 1000, seed: int = 0, alpha: float = 0.05,
-                     rank_controls: bool = False) -> dict:
+                     rank_controls: bool = True, control_degree: int = 2) -> dict:
     """Partial Spearman correlation of ``x`` and ``y`` given ``controls`` (n, k).
 
     ``x`` and ``y`` are rank-transformed (average ranks), each is residualised on ``[1, controls]``
-    by ordinary least squares, and the Pearson correlation of the two residual vectors is returned.
-    By default the control columns enter as given (NOT ranked) so that non-linear terms such as
-    ``p_s**2`` remain meaningful (ranking would make ``p_s`` and ``p_s**2`` identical); pass
-    ``rank_controls=True`` for the textbook all-ranks partial Spearman.
-    ``p`` is the usual partial-correlation t-test, t = r * sqrt(df / (1 - r^2)) with df = n - 2 - k
-    (an approximation for ranks). The CI is a percentile bootstrap over rows (re-ranked per resample).
-    Rows with NaN in x, y or any control are dropped.
+    by (minimum-norm) least squares, and the Pearson correlation of the two residual vectors is
+    returned. Everything lives in rank space: by default each control column is rank-transformed
+    too (scaled to (0, 1)) and the powers ``1..control_degree`` of every ranked control are included,
+    so a non-monotone (hump-shaped) dependence on a control such as ``p_s`` is removed as a
+    polynomial in rank(p_s). Passing both ``p_s`` and ``p_s**2`` is harmless (identical ranks give
+    duplicated columns, which do not change the least-squares fit). With ``rank_controls=False`` the
+    control columns enter untransformed and no powers are added (supply polynomial terms yourself);
+    note that ranks of x and y are then non-linear in the raw controls, which can leave shared
+    structure in the residuals when a control is unbounded (e.g. normal).
+    ``p`` is the usual partial-correlation t-test, t = r * sqrt(df / (1 - r^2)) with
+    df = n - 2 - k_eff, k_eff = rank of the control design minus one (an approximation for ranks).
+    The CI is a percentile bootstrap over rows (re-ranked per resample). Rows with NaN in x, y or any
+    control are dropped.
     """
     xa, ya = _as_1d(x, "x"), _as_1d(y, "y")
     C = np.asarray(controls, dtype=float)
@@ -208,16 +223,22 @@ def partial_spearman(x, y, controls: np.ndarray, n_boot: int = 1000, seed: int =
         C = C[:, None]
     if C.ndim != 2 or C.shape[0] != xa.size or ya.size != xa.size:
         raise ValueError(f"shape mismatch: x {xa.shape}, y {ya.shape}, controls {C.shape}")
+    if control_degree < 1:
+        raise ValueError("control_degree must be >= 1")
     m = np.isfinite(xa) & np.isfinite(ya) & np.isfinite(C).all(axis=1)
     xa, ya, C = xa[m], ya[m], C[m]
-    n, k = int(xa.size), int(C.shape[1])
-    out = {"rho": float("nan"), "ci_lo": float("nan"), "ci_hi": float("nan"), "p": None, "n": n, "k": k,
-           "n_boot": int(n_boot), "rank_controls": bool(rank_controls)}
-    if n < k + 3:
+    n = int(xa.size)
+    out = {"rho": float("nan"), "ci_lo": float("nan"), "ci_hi": float("nan"), "p": None, "n": n,
+           "k": int(C.shape[1]), "n_boot": int(n_boot), "rank_controls": bool(rank_controls),
+           "control_degree": int(control_degree)}
+    if n < C.shape[1] * control_degree + 3:
         return out
-    rho = _partial_rank_corr(xa, ya, C, rank_controls)
+    D = _control_design(C, rank_controls, control_degree)
+    k_eff = int(np.linalg.matrix_rank(D)) - 1
+    out["k_eff"] = k_eff
+    rho = _partial_rank_corr(xa, ya, D)
     out["rho"] = rho
-    df = n - 2 - k
+    df = n - 2 - k_eff
     if np.isfinite(rho) and abs(rho) < 1.0 and df > 0:
         t = rho * math.sqrt(df / (1.0 - rho**2))
         out["p"] = _f(2.0 * sps.t.sf(abs(t), df))
@@ -227,7 +248,7 @@ def partial_spearman(x, y, controls: np.ndarray, n_boot: int = 1000, seed: int =
     boots = np.empty(n_boot)
     for b in range(n_boot):
         idx = rng.integers(0, n, size=n)
-        boots[b] = _partial_rank_corr(xa[idx], ya[idx], C[idx], rank_controls)
+        boots[b] = _partial_rank_corr(xa[idx], ya[idx], _control_design(C[idx], rank_controls, control_degree))
     out["ci_lo"], out["ci_hi"] = _percentile_ci(boots, alpha)
     out["n_boot_valid"] = int(np.isfinite(boots).sum())
     return out
@@ -366,7 +387,7 @@ def _fold_designs(X: np.ndarray) -> list[tuple[np.ndarray, np.ndarray, np.ndarra
         mean = Xtr_f.mean(axis=0)
         std = Xtr_f.std(axis=0)
         std = np.where(std > _EPS, std, 1.0)
-        Ztr = (Xtr_f - mean) / std
+        Ztr = np.asfortranarray((Xtr_f - mean) / std)
         xi = np.where(np.isnan(X[i]), mu_imp, X[i])
         folds.append((tr, Ztr, (xi - mean) / std))
     return folds
@@ -397,6 +418,31 @@ def _sklearn_loo_predictions(folds, y: np.ndarray, alpha: float, model: str) -> 
         est.fit(Ztr, (ytr - my) / sy)
         pred[i] = my + sy * float(est.predict(zi[None, :])[0])
     return pred
+
+
+def _lasso_path_loo(folds, y: np.ndarray, alphas: Sequence[float]) -> dict[float, np.ndarray]:
+    """LOO predictions of sklearn's Lasso for every alpha at once, via ``enet_path`` (the same coordinate
+    descent solver as ``Lasso.fit``; with centred inputs the intercept-free path equals ``Lasso`` with an
+    intercept). y is standardised per training fold exactly as in ``_sklearn_loo_predictions``."""
+    from sklearn.linear_model import enet_path
+
+    alphas_desc = sorted({float(a) for a in alphas}, reverse=True)
+    n = y.size
+    preds = {a: np.empty(n) for a in alphas_desc}
+    for i, (tr, Ztr, zi) in enumerate(folds):
+        ytr = y[tr]
+        my, sy = float(ytr.mean()), float(ytr.std())
+        if sy <= _EPS:
+            for a in alphas_desc:
+                preds[a][i] = my
+            continue
+        ys = np.ascontiguousarray((ytr - my) / sy)
+        _, coefs, _ = enet_path(Ztr, ys, l1_ratio=1.0, alphas=alphas_desc, check_input=False, copy_X=False,
+                                tol=1e-6, max_iter=20000)
+        pred_std = zi @ coefs  # (n_alphas,)
+        for k, a in enumerate(alphas_desc):
+            preds[a][i] = my + sy * float(pred_std[k])
+    return preds
 
 
 def _ridge_loo_smoother(folds, n: int, p: int, alpha: float) -> np.ndarray:
@@ -439,7 +485,8 @@ def loo_linear_selector(X: np.ndarray, y: np.ndarray, feature_names: Sequence[st
       predictions over the alpha grid, alpha re-selected by LOO MSE) is re-run on each shuffle;
       ``perm_p = (1 + #{perm: loo_spearman_perm >= loo_spearman}) / (n_perm + 1)`` (Phipson & Smyth
       correction). For ridge the LOO prediction is linear in y, so the permutation null is computed
-      exactly with the LOO smoother matrix (checked against the sklearn predictions); Lasso refits.
+      exactly with the LOO smoother matrix (checked against the sklearn predictions); for Lasso every
+      fold is refit with sklearn's ``enet_path`` (whole alpha grid per call).
     - The exported model is refit on all rows (imputation / standardisation from the full data);
       ``coef[name]`` is the change in y (original units) per one standard deviation of the feature and
       ``intercept`` the prediction at the feature means. ``standardize`` holds the full-data mean/std.
@@ -469,7 +516,10 @@ def loo_linear_selector(X: np.ndarray, y: np.ndarray, feature_names: Sequence[st
         raise ValueError("alphas must be non-empty")
 
     folds = _fold_designs(Xa)
-    preds = {a: _sklearn_loo_predictions(folds, ya, a, model) for a in alphas}
+    if model == "ridge":
+        preds = {a: _sklearn_loo_predictions(folds, ya, a, model) for a in alphas}
+    else:
+        preds = _lasso_path_loo(folds, ya, alphas)
     grid = {}
     for a in alphas:
         mse, r2, rho = _loo_stats(ya, preds[a])
@@ -508,8 +558,7 @@ def loo_linear_selector(X: np.ndarray, y: np.ndarray, feature_names: Sequence[st
             for b in range(n_perm):
                 yp = ya[rng.permutation(n)]
                 best_mse, best_rho = math.inf, 0.0
-                for a in alphas:
-                    pr = _sklearn_loo_predictions(folds, yp, a, model)
+                for a, pr in _lasso_path_loo(folds, yp, alphas).items():
                     mse, _, rho = _loo_stats(yp, pr)
                     if mse < best_mse:
                         best_mse, best_rho = mse, rho
