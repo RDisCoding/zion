@@ -15,7 +15,7 @@ class DummyTok:
     chat_template = None
     unk_token_id = None
 
-    def __init__(self, eos=151645, pad=151643):
+    def __init__(self, eos=151643, pad=151662):  # Qwen2.5-Math base: eos <|endoftext|>, pad <|fim_pad|>
         self.eos_token_id = eos
         self.pad_token_id = pad
 
@@ -112,7 +112,7 @@ def test_build_train_dataset(tmp_path, problem):
 def test_check_grpo_args_catches_length_and_eos_mismatch(tmp_path):
     pytest.importorskip("trl")
     cfg = small_cfg(tmp_path)
-    stop = [151645, 151643]
+    stop = [151643, 151645]  # primary = the model's EOS <|endoftext|>, secondary <|im_end|>
     args = cfg.to_grpo_config(tmp_path / "trainer", max_steps=2, seed=1, stop_token_ids=stop)
     audited = check_grpo_args(args, cfg, DummyTok(), stop)
     assert audited["max_completion_length"] == 64 and audited["num_generations"] == 4
@@ -125,7 +125,20 @@ def test_check_grpo_args_catches_length_and_eos_mismatch(tmp_path):
     args.max_completion_length = 64
     with pytest.raises(RuntimeError, match="eos_token_id"):
         check_grpo_args(args, cfg, DummyTok(eos=151643, pad=151643), stop)
+    with pytest.raises(RuntimeError, match="is not the primary stop"):
+        check_grpo_args(args, cfg, DummyTok(eos=151645, pad=151662), stop)
     assert check_grpo_args(args, cfg, DummyTok(), stop)["max_completion_length"] == 64
+
+
+def test_check_grpo_args_rejects_pad_that_is_a_stop_token(tmp_path):
+    """The E0 G3 configuration (eos <|im_end|>, pad <|endoftext|>, both stops) must be refused: TRL would keep the
+    padding after an <|endoftext|> stop inside the completion mask while still counting it as finished."""
+    pytest.importorskip("trl")
+    cfg = small_cfg(tmp_path)
+    old_stop = [151645, 151643]
+    args = cfg.to_grpo_config(tmp_path / "trainer", max_steps=2, seed=1, stop_token_ids=old_stop)
+    with pytest.raises(RuntimeError, match="is a stop token"):
+        check_grpo_args(args, cfg, DummyTok(eos=151645, pad=151643), old_stop)
 
 
 def test_latest_checkpoint(tmp_path):

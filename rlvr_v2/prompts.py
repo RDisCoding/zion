@@ -58,7 +58,10 @@ def stop_strings(style: str) -> list[str]:
 
 
 def resolve_stop_token_ids(tokenizer, style: str) -> list[int]:
-    """Primary stop first. Chat styles end turns with <|im_end|>; the base tokenizer's eos is <|endoftext|>."""
+    """All stop ids for the style, primary first. Primary = the tokenizer's EOS (the model's declared end of
+    sequence), which is also the single id TRL ends the completion mask at, so it must be the token the model
+    actually emits; the style's other stop strings follow as secondary stops. Qwen2.5-Math-1.5B is a base model whose EOS is <|endoftext|>; it ends
+    chat-formatted answers with <|endoftext|>, not <|im_end|> (E0 G3, 2026-10-04)."""
     ids: list[int] = []
     vocab = None
     for s in stop_strings(style):
@@ -76,22 +79,39 @@ def resolve_stop_token_ids(tokenizer, style: str) -> list[int]:
             if s not in vocab:
                 continue
         ids.append(int(tid))
-    if tokenizer.eos_token_id is not None and tokenizer.eos_token_id not in ids:
-        ids.append(int(tokenizer.eos_token_id))
+    eos = tokenizer.eos_token_id
+    if eos is not None:
+        eos = int(eos)
+        if eos in ids:
+            ids.remove(eos)
+        ids.insert(0, eos)
     return ids
 
 
+# Existing vocabulary tokens that are never generated in this setting (no embedding resize needed).
+PAD_CANDIDATES = ("<|fim_pad|>", "<|vision_pad|>", "<empty_output>", "<pad>", "[PAD]")
+
+
+def choose_pad_token(tokenizer, stop_ids: list[int]) -> str:
+    """A pad token that is NOT a stop token. TRL treats a completion whose last id is eos OR pad as finished, so a
+    pad that is also a stop token lets padding leak into the GRPO loss."""
+    vocab = tokenizer.get_vocab()
+    for tok in PAD_CANDIDATES:
+        tid = vocab.get(tok)
+        if tid is not None and int(tid) not in stop_ids:
+            return tok
+    raise RuntimeError(f"no pad token candidate {PAD_CANDIDATES} in the vocabulary is distinct from the stop ids "
+                       f"{stop_ids}; add one to PAD_CANDIDATES (adding a new token would require an embedding resize)")
+
+
 def configure_tokenizer(tokenizer, style: str):
-    """Make the tokenizer consistent with the prompt style: eos = primary stop, pad distinct, left padding."""
+    """Make the tokenizer consistent with the prompt style: eos = primary stop (the model's own EOS), pad = an
+    existing token that is not any stop token, left padding."""
     stops = resolve_stop_token_ids(tokenizer, style)
     primary = tokenizer.convert_ids_to_tokens(stops[0])
     if tokenizer.eos_token != primary:
         tokenizer.eos_token = primary
-    if tokenizer.pad_token is None or tokenizer.pad_token == tokenizer.eos_token:
-        pad = ENDOFTEXT if ENDOFTEXT != tokenizer.eos_token and ENDOFTEXT in tokenizer.get_vocab() else None
-        if pad is None:
-            tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
-        else:
-            tokenizer.pad_token = pad
+    if tokenizer.pad_token_id is None or int(tokenizer.pad_token_id) in stops:
+        tokenizer.pad_token = choose_pad_token(tokenizer, stops)
     tokenizer.padding_side = "left"
     return tokenizer

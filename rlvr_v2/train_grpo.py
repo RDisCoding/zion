@@ -308,6 +308,11 @@ def check_grpo_args(args, cfg: Config, tokenizer=None, stop_token_ids: list[int]
                 )
             if pad is None or pad == eos:
                 problems.append(f"tokenizer.pad_token_id={pad} must exist and differ from eos_token_id={eos}")
+            elif pad in stop_token_ids:
+                problems.append(
+                    f"tokenizer.pad_token_id={pad} is a stop token {list(stop_token_ids)}; TRL would count a completion "
+                    f"ending in it as finished while its completion mask runs past it into the padding"
+                )
     if problems:
         raise RuntimeError("GRPO preflight failed; refusing to train:\n  - " + "\n  - ".join(problems))
     return audited

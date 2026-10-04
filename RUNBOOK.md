@@ -34,8 +34,11 @@ config hash that groups runs).
 
 ### A2. Cheap gates (1–3 h)
 ```bash
-GATES=g1,g2,g3,g5 scripts/local/e0_gates.sh
+FRESH=1 GATES=g1,g2,g3,g5 scripts/local/e0_gates.sh     # FRESH=1 moves any earlier results/e0 aside (never deletes)
 ```
+Use `FRESH=1` whenever earlier gate outputs must not be reused (the 2026-10-04 run 1 is superseded: see the prereg
+deviations log). If G2 fails, read `results/e0/g2_pytest.log`; if the grader cannot verify known equivalences, the
+run now stops at once with `GraderUnavailableError` and a diagnosis instead of grading silently by string match.
 G1 scores the base model on MATH-500 under both prompt styles and pins the better one; G2 runs the grader tests; G3 checks
 truncation and stop tokens; G5 checks that two identical evals agree. The script prints each gate's pass/fail. Expected:
 all four `True`, `all_passed = False` (G4 has not run yet; that is correct). `results/e0/frozen_args.txt` now holds the

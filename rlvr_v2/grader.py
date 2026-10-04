@@ -9,8 +9,10 @@ Rules
 from __future__ import annotations
 
 import inspect
+import logging
 import os
 import re
+from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Iterable
@@ -89,34 +91,87 @@ def _filter_kwargs(fn, **kwargs):
     return {k: v for k, v in kwargs.items() if k in params}
 
 
-class MathVerifyGrader:
-    """math-verify backed grader with normalised-string fast path."""
+class GraderUnavailableError(RuntimeError):
+    """math-verify cannot establish known equivalences in this process; grading would silently degrade to
+    exact string matching, so every caller must stop."""
 
-    def __init__(self, timeout_s: int | None = 5, float_rounding: int = 6):
+
+# Known-equivalent pairs that need the symbolic (LaTeX) path; the grader refuses to exist if any fails.
+SELF_CHECK_PAIRS = (("0.5", "\\frac{1}{2}"), ("\\frac{\\sqrt{2}}{2}", "\\frac{1}{\\sqrt{2}}"))
+_log = logging.getLogger(__name__)
+
+
+class MathVerifyGrader:
+    """math-verify backed grader with normalised-string fast path. Exceptions inside math-verify still mean
+    "not equivalent" for that answer, but they are counted (`self.errors`) and logged, and a failing self-check
+    at construction raises `GraderUnavailableError`."""
+
+    def __init__(self, timeout_s: int | None = 5, float_rounding: int = 6, self_check: bool = True):
         self.timeout_s = None if os.name == "nt" else timeout_s
         self.float_rounding = float_rounding
+        self.errors: Counter = Counter()
+        self.last_error: str | None = None
+        from math_verify import parse, verify  # type: ignore  # hard dependency: no silent fallback
+
+        if self.timeout_s is None:  # math-verify warns on every call when timeouts are disabled (Windows)
+            for name in ("math_verify", "math_verify.parser", "math_verify.grader", "math_verify.utils"):
+                logging.getLogger(name).setLevel(logging.ERROR)
+        self._parse, self._verify = parse, verify
+        if self_check:
+            self.self_check()
+
+    def _record(self, where: str, exc: BaseException) -> None:
+        key = f"{where}:{type(exc).__name__}"
+        self.errors[key] += 1
+        self.last_error = f"{key}: {exc!r}"
+        if self.errors[key] <= 3:
+            _log.warning("math-verify %s raised %r (occurrence %d; treated as not equivalent)", where, exc,
+                         self.errors[key])
+
+    def self_check(self) -> None:
+        for a, b in SELF_CHECK_PAIRS:
+            if not self.equivalent(a, b):
+                raise GraderUnavailableError(
+                    f"math-verify self-check failed: {a!r} vs {b!r} not equivalent in this process. "
+                    + self.diagnose(a, b))
+
+    def diagnose(self, a: str, b: str) -> str:
+        """Re-run parse/verify for one pair WITHOUT exception handling and report what happens."""
+        import importlib.metadata as md
+        import sys
+
+        info = {"timeout_s": self.timeout_s, "os": os.name, "python": sys.executable, "cwd": os.getcwd(),
+                "sys.path[0]": sys.path[0] if sys.path else None, "last_swallowed": self.last_error,
+                "errors": dict(self.errors)}
+        for p in ("math-verify", "latex2sympy2_extended", "antlr4-python3-runtime", "sympy"):
+            try:
+                info[p] = md.version(p)
+            except Exception as e:  # pragma: no cover
+                info[p] = f"missing ({e!r})"
         try:
-            import logging
+            import math_verify
 
-            from math_verify import parse, verify  # type: ignore
+            info["math_verify_file"] = math_verify.__file__
+            pkw = _filter_kwargs(self._parse, parsing_timeout=self.timeout_s)
+            pa, pb = self._parse(f"${a}$", **pkw), self._parse(f"${b}$", **pkw)
+            info["parsed"] = [repr(pa), repr(pb)]
+            vkw = _filter_kwargs(self._verify, float_rounding=self.float_rounding, timeout_seconds=self.timeout_s)
+            info["verify"] = repr(self._verify(pa, pb, **vkw))
+        except BaseException as e:  # noqa: BLE001 - diagnosis must report anything, incl. timeouts
+            import traceback
 
-            if self.timeout_s is None:  # math-verify warns on every call when timeouts are disabled (Windows)
-                for name in ("math_verify", "math_verify.parser", "math_verify.grader", "math_verify.utils"):
-                    logging.getLogger(name).setLevel(logging.ERROR)
-            self._parse, self._verify = parse, verify
-        except Exception:  # pragma: no cover - exercised only when math-verify is missing
-            self._parse = self._verify = None
+            info["exception"] = "".join(traceback.format_exception(e))[-2000:]
+        return "Diagnosis: " + repr(info)
 
     # ------------------------------------------------------------- equivalence
     @lru_cache(maxsize=65536)
     def _parsed(self, s: str):
-        if self._parse is None:
-            return None
         kw = _filter_kwargs(self._parse, parsing_timeout=self.timeout_s)
         for wrapped in (f"${s}$", "\\boxed{" + s + "}", s):
             try:
                 out = self._parse(wrapped, **kw)
-            except Exception:
+            except Exception as e:
+                self._record("parse", e)
                 out = None
             if out:
                 return out
@@ -130,8 +185,6 @@ class MathVerifyGrader:
             return False
         if na == nb:
             return True
-        if self._verify is None:
-            return False
         pa, pb = self._parsed(na), self._parsed(nb)
         if not pa or not pb:
             pa, pb = self._parsed(a), self._parsed(b)
@@ -140,7 +193,8 @@ class MathVerifyGrader:
         kw = _filter_kwargs(self._verify, float_rounding=self.float_rounding, timeout_seconds=self.timeout_s)
         try:
             return bool(self._verify(pa, pb, **kw)) or bool(self._verify(pb, pa, **kw))
-        except Exception:
+        except Exception as e:
+            self._record("verify", e)
             return False
 
     # ------------------------------------------------------------- grading

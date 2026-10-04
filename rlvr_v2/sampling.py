@@ -60,6 +60,16 @@ def postprocess_sequence_ex(generated_ids: Sequence[int], stop_ids: Sequence[int
     return [int(t) for t in generated_ids], "length", None
 
 
+def chat_marker_ids(tokenizer) -> set[int]:
+    """Ids of turn-start markers (<|im_start|>) in this vocabulary. Generating one means the model started a new
+    chat turn instead of ending its answer (prereg G3: no <|im_start|> in completions)."""
+    try:
+        tid = tokenizer.get_vocab().get("<|im_start|>")
+    except Exception:  # fake tokenizers in tests
+        tid = None
+    return {int(tid)} if tid is not None else set()
+
+
 def is_oom_error(exc: BaseException) -> bool:
     """CUDA OOM, either the dedicated exception class or a RuntimeError mentioning it."""
     if isinstance(exc, torch.cuda.OutOfMemoryError):
@@ -97,6 +107,7 @@ class HFSampler:
         self.tokenizer = tokenizer
         self.gen_cfg = gen_cfg
         self.stop_token_ids = [int(s) for s in stop_token_ids]
+        self.marker_ids = chat_marker_ids(tokenizer)
         self.tokenizer.padding_side = "left"
         self.stats: dict[str, float] = _empty_stats()  # last call
         self.totals: dict[str, float] = _empty_stats()  # cumulative over calls
@@ -191,7 +202,8 @@ class HFSampler:
                 chunk_steps = 0
                 for (pi, ri), kept, reason, sid, text in zip(chunk, kept_lists, reasons, stop_hits, texts):
                     results[pi][ri] = Rollout(text=text, n_tokens=len(kept), truncated=(reason == "length"),
-                                              finish_reason=reason, stop_id=sid)
+                                              finish_reason=reason, stop_id=sid,
+                                              chat_marker=not self.marker_ids.isdisjoint(kept))
                     produced = len(kept) + (1 if reason == "stop" else 0)  # the stop token was generated too
                     generated_tokens += produced
                     chunk_steps = max(chunk_steps, produced)
@@ -245,6 +257,7 @@ class VLLMSampler:
             seed=0,
         )
         self._tokenizer = self._llm.get_tokenizer()
+        self.marker_ids = chat_marker_ids(self._tokenizer)
         self.stats: dict[str, float] = _empty_stats()
 
     def _lora_request(self):
@@ -297,7 +310,8 @@ class VLLMSampler:
                     sid = int(ids[-1])
                     ids = ids[:-1]  # count kept tokens only, like HFSampler
                 rollouts.append(Rollout(text=o.text, n_tokens=len(ids), truncated=(reason != "stop"),
-                                        finish_reason=reason, stop_id=sid))
+                                        finish_reason=reason, stop_id=sid,
+                                        chat_marker=not self.marker_ids.isdisjoint(ids)))
             if len(rollouts) != n:
                 raise RuntimeError(f"vLLM returned {len(rollouts)} completions for a prompt, expected {n}")
             results.append(rollouts)

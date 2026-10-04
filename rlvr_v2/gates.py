@@ -146,10 +146,16 @@ def gate_g1(ctx: _Ctx) -> dict:
 
 
 def gate_g2(ctx: _Ctx) -> dict:
-    proc = subprocess.run([sys.executable, "-m", "pytest", "-q", "tests/test_grader.py", "-p", "no:cacheprovider"],
-                          cwd=REPO_ROOT, capture_output=True, text=True, timeout=1800)
-    tail = "\n".join(proc.stdout.strip().splitlines()[-3:])
-    return {"passed": proc.returncode == 0, "returncode": proc.returncode, "summary": tail,
+    cmd = [sys.executable, "-m", "pytest", "-q", "-rfE", "tests/test_grader.py", "-p", "no:cacheprovider"]
+    proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True, timeout=1800)
+    log_path = ctx.out_root / "g2_pytest.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(f"$ {' '.join(cmd)}\n(cwd={REPO_ROOT})\n\n--- stdout ---\n{proc.stdout}\n--- stderr ---\n{proc.stderr}",
+                        encoding="utf-8")
+    lines = proc.stdout.strip().splitlines()
+    failed = [ln.split(" ", 1)[1].split(" - ")[0] for ln in lines if ln.startswith(("FAILED ", "ERROR "))]
+    return {"passed": proc.returncode == 0, "returncode": proc.returncode, "summary": "\n".join(lines[-3:]),
+            "failed_tests": failed, "log": str(log_path),
             "note": "cross-check against the Qwen2.5-Math grader is manual (see prereg G2)"}
 
 
@@ -168,9 +174,9 @@ def gate_g3(ctx: _Ctx) -> dict:
     fmt = sum(s.format_rate for s in sig) / len(sig)
     none_rate = sum(s.none_rate for s in sig) / len(sig)
     len_mean = sum(s.len_mean for s in sig) / len(sig)
-    # Which stop token ended each rollout: TRL masks completions that do not end with the tokenizer's
-    # single EOS (<|im_end|> for chat styles), so a large secondary-stop share would silently shrink the
-    # training signal and inflate completions/clipped_ratio.
+    # Which stop token ended each rollout. TRL ends the completion mask at the tokenizer's single EOS (the
+    # primary stop); a completion ending on a secondary stop keeps its trailing padding inside the GRPO loss, so
+    # the secondary-stop share bounds that contamination. Prereg G3 also requires no <|im_start|> in completions.
     from .artifacts import read_jsonl
     from .prompts import resolve_stop_token_ids
 
@@ -181,12 +187,14 @@ def gate_g3(ctx: _Ctx) -> dict:
         counts[str(r.get("stop_id"))] = counts.get(str(r.get("stop_id")), 0) + 1
     n_rows = max(1, len(rows))
     secondary_share = sum(v for k, v in counts.items() if k not in (str(stop_ids[0]), "None")) / n_rows
+    n_chat_marker = sum(1 for r in rows if r.get("chat_marker"))
     passed = (trunc <= THRESHOLDS["g3_trunc_rate_max"] and fmt >= THRESHOLDS["g3_format_rate_min"]
-              and secondary_share <= THRESHOLDS["g3_secondary_stop_max"])
+              and secondary_share <= THRESHOLDS["g3_secondary_stop_max"] and n_chat_marker == 0)
     return {"passed": bool(passed), "style": style, "n_problems": len(sig), "k": cfg_s.gen.sieve.n,
             "trunc_rate": trunc, "format_rate": fmt, "none_rate": none_rate, "mean_completion_tokens": len_mean,
             "p_s_mean": sum(s.p_s for s in sig) / len(sig), "stop_token_ids": stop_ids,
-            "stop_id_counts": counts, "secondary_stop_share": secondary_share}
+            "primary_stop_id": stop_ids[0], "tokenizer_eos_id": tok.eos_token_id, "tokenizer_pad_id": tok.pad_token_id,
+            "stop_id_counts": counts, "secondary_stop_share": secondary_share, "n_chat_marker": n_chat_marker}
 
 
 def gate_g5(ctx: _Ctx) -> dict:
@@ -283,6 +291,7 @@ def run_gates(cfg: Config, gates: tuple[str, ...] = ("g1", "g2", "g3", "g5", "g4
             log.exception("gate %s crashed", g)
             res = {"passed": False, "error": repr(e)}
         res["wall_s"] = round(time.time() - t0, 1)
+        res["grader_errors"] = dict(ctx.grader.errors)  # exceptions swallowed inside math-verify, cumulative
         report["gates"][g] = res
         report["all_passed"] = not gate_problems(report)
         atomic_write_json(out, report)

@@ -40,5 +40,6 @@ def test_unknown_style():
 def test_hash_and_stops():
     assert prompt_hash("abc") == prompt_hash("abc") and len(prompt_hash("abc")) == 12
     assert stop_strings("raw") == ["<|endoftext|>"]
-    assert resolve_stop_token_ids(FakeTok(), "qwen_math_chat") == [151645, 151643]
+    # primary = the tokenizer's EOS (<|endoftext|> for the Qwen2.5-Math base model), then the style's other stops
+    assert resolve_stop_token_ids(FakeTok(), "qwen_math_chat") == [151643, 151645]
     assert resolve_stop_token_ids(FakeTok(), "raw") == [151643]

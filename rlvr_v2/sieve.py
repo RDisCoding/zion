@@ -106,7 +106,7 @@ def measure_signals(
                         rollouts_w.write({
                             "unique_id": p.unique_id, "policy_tag": policy_tag, "rollout_idx": i, "prompt_hash": ph,
                             "n_tokens": r.n_tokens, "finish_reason": r.finish_reason, "truncated": r.truncated,
-                            "stop_id": r.stop_id,
+                            "stop_id": r.stop_id, "chat_marker": r.chat_marker,
                             "boxed": r.boxed, "correct": r.correct, "answer_class": r.answer_class, "text": r.text,
                         })
                 if signals_w is not None:

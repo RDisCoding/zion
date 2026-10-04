@@ -112,3 +112,22 @@ def test_cluster_answers(grader):
     assert labels[3] != labels[0]
     assert labels[4] == NONE_CLASS and labels[6] == NONE_CLASS
     assert len({lab for lab in labels if lab != NONE_CLASS}) == 2
+
+
+def test_self_check_passes_and_reports_no_errors(grader):
+    grader.self_check()
+    assert all(not k.startswith("verify") for k in grader.errors)
+
+
+def test_broken_math_verify_fails_loudly_instead_of_degrading():
+    from rlvr_v2.grader import GraderUnavailableError, MathVerifyGrader
+
+    g = MathVerifyGrader(self_check=False)
+
+    def broken_parse(*args, **kwargs):
+        raise RuntimeError("simulated parser failure")
+
+    g._parse = broken_parse
+    with pytest.raises(GraderUnavailableError, match="simulated parser failure"):
+        g.self_check()
+    assert g.errors and g.last_error and "simulated parser failure" in g.last_error
