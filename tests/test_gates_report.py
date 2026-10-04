@@ -4,7 +4,7 @@ import pytest
 
 from rlvr_v2 import cli
 from rlvr_v2.config import Config
-from rlvr_v2.gates import REQUIRED_GATES, gate_problems
+from rlvr_v2.gates import REQUIRED_GATES, frozen_overrides, gate_problems
 
 
 def _report(**passed):
@@ -43,3 +43,16 @@ def test_require_gates_exits_unless_all_five_passed(tmp_path, monkeypatch):
     assert "g4: not run" in str(exc.value)
     gates_path.write_text(json.dumps(_report(**{g: True for g in REQUIRED_GATES})))
     cli._require_gates(cfg)  # all five passed: returns normally
+
+
+def test_frozen_overrides_carry_style_and_budget_and_parse_back():
+    report = {"gates": {"g1": {"pinned_style": "oneshot_rlvr_chat"},
+                        "g4": {"frozen_budget": {"rounds": 200, "learning_rate": 5e-5}}}}
+    ov = frozen_overrides(report)
+    assert ov == ["prompt.style=oneshot_rlvr_chat", "train.rounds=200", "train.learning_rate=5e-05"]
+    from rlvr_v2.config import parse_overrides
+
+    parsed = parse_overrides(ov)
+    assert parsed["train"]["learning_rate"] == 5e-5 and parsed["train"]["rounds"] == 200
+    assert parsed["prompt"]["style"] == "oneshot_rlvr_chat"
+    assert frozen_overrides(None) == [] and frozen_overrides({"gates": {"g4": {"frozen_budget": None}}}) == []

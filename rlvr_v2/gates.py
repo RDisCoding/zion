@@ -49,6 +49,20 @@ def gate_problems(report: dict | None) -> list[str]:
     return problems
 
 
+def frozen_overrides(report: dict | None) -> list[str]:
+    """`key=value` overrides that carry gate decisions (G1's pinned prompt style, G4's frozen budget) into
+    sieve/eval/study runs, so nobody has to copy numbers by hand."""
+    gates = (report or {}).get("gates") or {}
+    out: list[str] = []
+    style = (gates.get("g1") or {}).get("pinned_style")
+    if style:
+        out.append(f"prompt.style={style}")
+    budget = (gates.get("g4") or {}).get("frozen_budget")
+    if budget:
+        out += [f"train.rounds={budget['rounds']}", f"train.learning_rate={budget['learning_rate']:g}"]
+    return out
+
+
 class _Ctx:
     """Lazy holder for model, tokenizer, problems and the grader shared by the gates."""
 
@@ -273,4 +287,8 @@ def run_gates(cfg: Config, gates: tuple[str, ...] = ("g1", "g2", "g3", "g5", "g4
         report["all_passed"] = not gate_problems(report)
         atomic_write_json(out, report)
         log.info("gate %s -> passed=%s", g, res.get("passed"))
+    overrides = frozen_overrides(report)
+    if overrides:
+        (out_root / "frozen_args.txt").write_text("--override " + " ".join(overrides) + "\n", encoding="utf-8")
+        log.info("wrote %s: %s", out_root / "frozen_args.txt", overrides)
     return report

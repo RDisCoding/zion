@@ -1,48 +1,79 @@
-# Runbook: cluster steps for 4–10 October 2026
+# Runbook: what to run, where, and how (cluster, 4–10 Oct 2026)
 
-Audience: whoever submits jobs on the institute SLURM cluster (Rudray or Vedang). Every step is idempotent; re-running a
-command or re-submitting an array is safe. Send `results/` back (rsync or zip) after each milestone so the analysis
-can run locally. Nothing below needs editing except node names and array ranges.
+Everything below is typed **on the cluster login node** in `~/rlvr_v2` (the cluster account is Vedang's per the old logs,
+or whoever has access). The laptop is only used to package the code (step 0) and to analyse `results/` afterwards.
+One person owns the cluster copy; never run two `e0_gates` jobs at once (both write `results/e0/gates.json`).
+Every step is idempotent: re-submitting a job or array is safe, finished work is skipped and partial work resumes.
 
-## Day 1 (4 Oct) — environment, benchmark, cheap gates
+## 0. Package on the laptop (once, after the last commit)
 ```bash
-git clone <repo-url> ~/rlvr_v2 && cd ~/rlvr_v2          # or copy the folder; keep the path free of spaces
-bash env/setup_cluster.sh                                  # ~15 min: venv ~/envs/rlvr_v2 + model/dataset prefetch
-sbatch --nodelist=node1 scripts/slurm/bench.sbatch         # ~20 min: results/bench/bench_node1.json
-sbatch --nodelist=node2 scripts/slurm/bench.sbatch
-GATES=g2,g1,g3,g5 sbatch scripts/slurm/e0_gates.sbatch     # G2 grader tests, G1 base evals (2 prompt styles), G3 stop tokens, G5 determinism
+cd "D:/RLVR Project/rlvr_v2"
+git status                                   # must be clean
+git archive --format=zip --prefix=rlvr_v2/ -o ../rlvr_v2_cluster.zip HEAD     # ~0.7 MB, tracked files only
+scp ../rlvr_v2_cluster.zip <user>@<login-host>:~/
 ```
-What to send back: `results/bench/*.json`, `results/e0/gates.json`, `results/slurm/*.out|err`.
-Decision taken from the benchmark: `gen.hf_batch_size`, `train.per_device_train_batch_size` (keep `num_generations` 64
-unless free memory < 20 GB, then `--override train.num_generations=32 gen.max_new_tokens=2048`), and whether N stays 32.
+On the login node: `cd ~ && unzip -q rlvr_v2_cluster.zip && cd rlvr_v2`
 
-## Day 2 (5 Oct) — positive control, sieve, launch Study 1
+## 1. One-time setup (login node, ~15 min, needs internet)
 ```bash
-GATES=g4 sbatch scripts/slurm/e0_gates.sbatch              # pi1 ladder; several hours; stops at the first passing rung
-sbatch scripts/slurm/sieve.sbatch                          # pool sieve K=32 + base eval + candidate selection + jobs CSV
-# after gates.json shows all_passed: true and manifests/study1_jobs.csv exists:
-sbatch --nodelist=node1 --array=0-19%1 scripts/slurm/study1_array.sbatch
+bash env/setup_cluster.sh        # creates ~/envs/rlvr_v2 (NOT the old selector_env), installs pinned libs, prefetches model + datasets
+mkdir -p results/slurm           # REQUIRED before any sbatch: the #SBATCH output paths are relative
+```
+Success = last line `Environment ready at ~/envs/rlvr_v2`. Partition/shards in the scripts (`--partition=gpu`, `--gres=shard:...`) match
+the old `train.sh` files. If a job sits pending with `Reason=Resources`, override on the command line, e.g. `sbatch --gres=shard:15 ...`.
+
+## 2. Day 1 (4 Oct): benchmark + cheap gates
+```bash
+sbatch --nodelist=node1 scripts/slurm/bench.sbatch
+sbatch --nodelist=node2 scripts/slurm/bench.sbatch
+GATES=g1,g2,g3,g5 sbatch scripts/slurm/e0_gates.sbatch
+```
+Watch: `squeue -u $USER`, `tail -f results/slurm/rlvr2-e0_<jobid>.out`.
+Outputs: `results/bench/bench_<node>.json`, `results/e0/gates.json`, `results/e0/frozen_args.txt`, `results/slurm/*.out|err`.
+Send these back (command in section 6). The benchmark decides the HF batch size and whether N stays 32.
+
+## 3. Day 2 (5 Oct): positive control, sieve, candidates
+```bash
+GATES=g4 sbatch scripts/slurm/e0_gates.sbatch              # pi1 positive control, up to 3 rungs, several hours
+export EXTRA_ARGS="$(cat results/e0/frozen_args.txt)"      # after G1: pins the prompt style
+sbatch scripts/slurm/sieve.sbatch                          # pool sieve K=32 -> base eval -> candidate selection -> jobs CSV
+```
+Both can run at the same time on different nodes. When both are done:
+```bash
+python -c "import json; r=json.load(open('results/e0/gates.json')); print(r['all_passed'], {g: v['passed'] for g, v in r['gates'].items()})"   # must be True
+ls manifests/study1_candidates.json manifests/study1_jobs.csv
+cat results/e0/frozen_args.txt                              # now also carries the G4-frozen budget
+```
+If G4 failed on all three rungs: stop and send everything back; do not start Study 1.
+
+## 4. Study 1 (launch 5 Oct, finish ~8 Oct)
+```bash
+export EXTRA_ARGS="$(cat results/e0/frozen_args.txt)"       # re-read: includes prompt style + frozen budget
+sbatch --nodelist=node1 --array=0-19%1  scripts/slurm/study1_array.sbatch
 sbatch --nodelist=node2 --array=20-39%1 scripts/slurm/study1_array.sbatch
 ```
-If G4 passed on rung 2 or 3, add `EXTRA_ARGS="--override train.rounds=<R> train.learning_rate=<lr>"` to every later
-sbatch line (the values are printed in `results/e0/gates.json` under `g4.frozen_budget`).
-
-## Days 3–5 (6–8 Oct) — monitor, resubmit, analyse
+Optional: add `--heldout` to EXTRA_ARGS to also score the 500 held-out train problems (the pre-registered sign check; costs one
+extra eval per job). Study jobs refuse to start unless all five gates (G1–G5) are present and passed.
+Monitor / resume after a timeout (same commands again):
 ```bash
 squeue -u $USER
-grep -l '"state": "done"' results/study1/*/*/status.json | wc -l     # finished jobs
-sbatch --nodelist=node1 --array=0-19%1 scripts/slurm/study1_array.sbatch   # resubmit after a timeout; finished jobs exit at once
+grep -l '"state": "done"' results/study1/*/*/status.json | wc -l      # finished jobs out of 40
 ```
-Send back `results/` (excluding `*/trainer/checkpoint-*` if large; adapters are ~70 MB each and can be excluded too).
-Locally: `python -m rlvr_v2.cli aggregate && python analysis/study1_analysis.py`.
 
-## Days 6–7 (9–10 Oct) — Study 2 only if the Study-1 gate allows
+## 5. Study 2 (only after Study 1 is done and we decide to run it)
 ```bash
-sbatch scripts/slurm/study2_array.sbatch                   # 3 arms x 3 seeds; add learned arm via EXTRA_ARGS if gated in
+sbatch scripts/slurm/study2_array.sbatch                    # 3 arms x 3 seeds; learned arm only if told to add it
 ```
+
+## 6. What to send back (after each milestone)
+```bash
+cd ~/rlvr_v2
+zip -qr results_$(date +%m%d_%H%M).zip results manifests -x "*/trainer/*" -x "*.safetensors" -x "*.bin" -x "*.pt"
+```
+then `scp` the zip to the laptop. Analysis runs locally: `python -m rlvr_v2.cli aggregate` then `python analysis/study1_analysis.py`.
 
 ## Red flags (stop and report)
-- `completions/clipped_ratio` > 0.2 in any `train_metrics.jsonl` (truncation guard should have aborted the job).
-- `frac_reward_zero_std` ≈ 1 for most steps of a run (no learning signal; check the candidate's p_s).
-- Base MATH-500 accuracy in G1 outside 15–95% or truncation > 10% (prompt/stop-token problem).
-- Two G5 evals disagreeing on > 2% of items (nondeterministic generation; lower batch size or disable SDPA fast paths).
+- `completions/clipped_ratio` above 0.2 in any `train_metrics.jsonl` (the truncation guard should already have aborted the job).
+- `frac_reward_zero_std` near 1 for most steps of a run (no learning signal; check that candidate's P_s).
+- G1 base accuracy outside 15–95% or truncation above 10%; G3 secondary-stop share above 5% (prompt or stop-token problem).
+- Two G5 evals disagreeing on more than 2% of items (nondeterministic generation).
