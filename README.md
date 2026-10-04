@@ -22,18 +22,19 @@ cd "D:/RLVR Project/rlvr_v2"
 ./.venv/Scripts/python -m rlvr_v2.cli show-config --config configs/study1.yaml
 ```
 
-## Cluster workflow (institute SLURM shards)
+## GPU workflow (see RUNBOOK.md for the full sequence and decision points)
+Single-GPU workstation, no SLURM (`scripts/local/`, same outputs and resume behaviour as the cluster scripts):
 ```bash
-bash env/setup_cluster.sh                         # once, on the login node (venv ~/envs/rlvr_v2 + prefetch)
-sbatch --nodelist=node1 scripts/slurm/bench.sbatch   # Day 1: throughput benchmark -> results/bench/
-sbatch scripts/slurm/e0_gates.sbatch                 # E0 gates (G1,G2,G3,G5 then G4 positive control)
-sbatch scripts/slurm/sieve.sbatch                    # pool sieve at K=32, base eval, candidate selection, job CSV
-sbatch --nodelist=node1 --array=0-19%1 scripts/slurm/study1_array.sbatch
-sbatch --nodelist=node2 --array=20-39%1 scripts/slurm/study1_array.sbatch
-python -m rlvr_v2.cli aggregate && python analysis/study1_analysis.py   # after rsync of results/
-sbatch scripts/slurm/study2_array.sbatch             # only if the Study-1 gate allows
+scripts/local/bench.sh                               # generation benchmark + 3-round GRPO memory/time probe
+GATES=g1,g2,g3,g5 scripts/local/e0_gates.sh          # cheap gates, pins the prompt style
+GATES=g4 scripts/local/e0_gates.sh                   # positive control on pi1 (stop/go)
+scripts/local/sieve.sh                               # pool sieve K=32, base eval, candidates, job table
+scripts/local/study1.sh                              # 40 jobs sequentially, resumable
+scripts/local/study2.sh                              # only if decided
 ```
-Re-submitting any array is safe: finished jobs exit immediately, partial ones resume.
+Institute SLURM cluster (`scripts/slurm/`): `bash env/setup_cluster.sh`, then `sbatch` the same steps
+(`bench.sbatch`, `e0_gates.sbatch`, `sieve.sbatch`, `study1_array.sbatch`, `study2_array.sbatch`).
+Re-running any step or re-submitting any array is safe: finished jobs exit immediately, partial ones resume.
 
 ## Layout
 `rlvr_v2/` package (config, data, prompts, grader, signals, selectors, sampling, sieve, evaluate, train_grpo,

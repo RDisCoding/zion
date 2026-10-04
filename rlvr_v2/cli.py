@@ -66,6 +66,10 @@ def load_split_problems(cfg: Config, names: tuple[str, ...] = ("pool", "heldout"
     return out
 
 
+def manifests_differ(old, new) -> bool:
+    return list(old.ids) != list(new.ids) or dict(old.hashes) != dict(new.hashes)
+
+
 def _require_gates(cfg: Config) -> None:
     if not cfg.run.require_gates:
         return
@@ -97,8 +101,18 @@ def cmd_manifests(args) -> None:
     manifests = make_splits(cfg.data, train, m500)
     out_dir = REPO_ROOT / "manifests"
     for name, m in manifests.items():
-        m.save(out_dir / f"{name}.json")
-        log.info("manifest %s: %d problems -> %s", name, len(m), out_dir / f"{name}.json")
+        path = out_dir / f"{name}.json"
+        if path.exists() and not args.force:
+            from .data import Manifest
+
+            if manifests_differ(Manifest.load(path), m):
+                sys.exit(f"{path} exists and differs from the regenerated split (the committed manifests are the "
+                         "frozen splits; the dataset revision may have changed). Re-run with --force only to re-cut "
+                         "the splits deliberately, and log it in paper/prereg.md.")
+            log.info("manifest %s unchanged (%d problems)", name, len(m))
+            continue
+        m.save(path)
+        log.info("manifest %s: %d problems -> %s", name, len(m), path)
     dups = manifests["pool"].meta.get("removed_near_duplicates", [])
     log.info("near-duplicates removed from the pool: %d", len(dups))
 
@@ -197,9 +211,15 @@ def cmd_gates(args) -> None:
 
     cfg = _cfg(args)
     report = run_gates(cfg, gates=tuple(args.gates.split(",")), out=_abs(args.out), extra=vars(args))
-    passed = report.get("all_passed")
-    log.info("E0 gates all_passed=%s -> %s", passed, args.out)
-    if passed is False:
+    from .gates import REQUIRED_GATES
+
+    results = report.get("gates", {})
+    requested = args.gates.split(",")
+    failed = [g for g in requested if not results.get(g, {}).get("passed")]
+    pending = [g for g in REQUIRED_GATES if g not in results]
+    log.info("E0 gates: ran %s; failed %s; still to run %s; all_passed=%s -> %s", requested, failed or "none",
+             pending or "none", report.get("all_passed"), args.out)
+    if failed:
         sys.exit(3)
 
 
@@ -221,6 +241,53 @@ def cmd_smoke(args) -> None:
     log.info("smoke test ok: %s", json.dumps(report, default=str)[:800])
 
 
+def cmd_study2_jobs(args) -> None:
+    from .curriculum import expand_study2_jobs
+
+    cfg = _cfg(args)
+    jobs = expand_study2_jobs(cfg)
+    if args.count:
+        print(len(jobs))
+        return
+    print("index,arm,seed")
+    for j in jobs:
+        print(f"{j['index']},{j['arm']},{j['seed']}")
+
+
+def cmd_train_probe(args) -> None:
+    """A few GRPO rounds on pi1 at the full training config: peak GPU memory and seconds per round, so batch
+    sizes are chosen before hours of gate/study runs are committed."""
+    import statistics
+
+    from .data import load_pi1
+    from .modeling import attach_fresh_lora, load_base_model, load_tokenizer, trainable_param_counts
+    from .train_grpo import run_grpo_burst
+
+    cfg = _cfg(args)
+    out = _abs(args.out)
+    tok = load_tokenizer(cfg)
+    model = attach_fresh_lora(load_base_model(cfg), cfg)
+    burst = run_grpo_burst(model, tok, [load_pi1()], cfg, out, max_steps=args.steps, seed=cfg.run.seed,
+                           grader=_grader(), context={"probe": True})
+    mems = [m for m in (lg.get("cuda_max_mem_gb") for lg in burst.logs) if m is not None]
+    step_times = [t for t in (lg.get("step_time") for lg in burst.logs) if isinstance(t, (int, float))]
+    s_per_round = statistics.median(step_times) if step_times else burst.wall_s / max(1, burst.steps_done)
+    t = cfg.train
+    report = {
+        **burst.summary(),
+        "s_per_round": s_per_round,
+        "s_per_round_source": "trl step_time median" if step_times else "wall / steps (includes trainer setup)",
+        "projected_hours_per_100_rounds": 100 * s_per_round / 3600,
+        "cuda_max_mem_gb": max(mems) if mems else None,
+        "params": trainable_param_counts(model),
+        "grpo": {"num_generations": t.num_generations, "per_device_train_batch_size": t.per_device_train_batch_size,
+                 "gradient_accumulation_steps": t.gradient_accumulation_steps, "max_new_tokens": cfg.gen.max_new_tokens,
+                 "hf_batch_size": cfg.gen.hf_batch_size, "dtype": cfg.model.dtype},
+    }
+    atomic_write_json(out / "train_probe.json", report)
+    log.info("train probe: %s", json.dumps(report, default=str))
+
+
 def cmd_show_config(args) -> None:
     cfg = _cfg(args)
     print(json.dumps(cfg.to_dict(), indent=1, default=str))
@@ -232,8 +299,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="rlvr_v2", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="command", required=True)
 
-    s = sub.add_parser("manifests", help="build pool/heldout/math500 manifests (downloads datasets)")
+    s = sub.add_parser("manifests", help="build or verify pool/heldout/math500 manifests (downloads datasets)")
     _add_common(s)
+    s.add_argument("--force", action="store_true", help="overwrite committed manifests that differ (re-cut splits)")
     s.set_defaults(func=cmd_manifests)
 
     s = sub.add_parser("sieve", help="measure base-policy signals for the pool at K=study1.k_sieve")
@@ -255,6 +323,17 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(s)
     s.add_argument("--out", default="manifests/study1_jobs.csv")
     s.set_defaults(func=cmd_study1_jobs)
+
+    s = sub.add_parser("study2-jobs", help="list Study-2 (arm, seed) jobs as CSV; --count prints only the number")
+    _add_common(s)
+    s.add_argument("--count", action="store_true")
+    s.set_defaults(func=cmd_study2_jobs)
+
+    s = sub.add_parser("train-probe", help="few GRPO rounds on pi1 at full config: peak memory and s/round")
+    _add_common(s)
+    s.add_argument("--steps", type=int, default=3)
+    s.add_argument("--out", default="results/bench/train_probe")
+    s.set_defaults(func=cmd_train_probe)
 
     s = sub.add_parser("study1", help="run one Study-1 job (train + eval), resumable")
     _add_common(s)
