@@ -35,6 +35,18 @@ THRESHOLDS = {
 }
 LADDER = ((100, 2.0e-5), (100, 5.0e-5), (200, 5.0e-5))
 STYLES = ("qwen_math_chat", "oneshot_rlvr_chat")
+REQUIRED_GATES = ("g1", "g2", "g3", "g4", "g5")
+
+
+def gate_problems(report: dict | None) -> list[str]:
+    """Reasons a gates report does not authorise study jobs: any required gate missing or not passed.
+    A partial report (e.g. G1-G3/G5 done, G4 positive control not yet run) must NOT authorise anything."""
+    if not report:
+        return ["results/e0/gates.json is missing or empty"]
+    results = report.get("gates") or {}
+    problems = [f"{g}: not run" for g in REQUIRED_GATES if g not in results]
+    problems += [f"{g}: failed" for g in REQUIRED_GATES if g in results and not results[g].get("passed")]
+    return problems
 
 
 class _Ctx:
@@ -258,7 +270,7 @@ def run_gates(cfg: Config, gates: tuple[str, ...] = ("g1", "g2", "g3", "g5", "g4
             res = {"passed": False, "error": repr(e)}
         res["wall_s"] = round(time.time() - t0, 1)
         report["gates"][g] = res
-        report["all_passed"] = all(bool(r.get("passed")) for r in report["gates"].values())
+        report["all_passed"] = not gate_problems(report)
         atomic_write_json(out, report)
         log.info("gate %s -> passed=%s", g, res.get("passed"))
     return report

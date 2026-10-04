@@ -69,11 +69,12 @@ def load_split_problems(cfg: Config, names: tuple[str, ...] = ("pool", "heldout"
 def _require_gates(cfg: Config) -> None:
     if not cfg.run.require_gates:
         return
-    gates = read_json(REPO_ROOT / "results" / "e0" / "gates.json")
-    if not gates:
-        sys.exit("results/e0/gates.json missing: run the E0 gates first (or set run.require_gates=false for dev)")
-    if gates.get("all_passed") is False:
-        sys.exit("E0 gates did not all pass; refusing to start study jobs")
+    from .gates import gate_problems
+
+    problems = gate_problems(read_json(REPO_ROOT / "results" / "e0" / "gates.json"))
+    if problems:
+        sys.exit("E0 gates do not authorise study jobs (" + "; ".join(problems) + "). Run the missing gates "
+                 "(see RUNBOOK.md) or set run.require_gates=false for development.")
 
 
 def _load_model_and_tokenizer(cfg: Config, adapter: str | None = None):
