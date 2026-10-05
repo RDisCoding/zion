@@ -61,7 +61,7 @@ _STRIP_PATTERNS = [
     (re.compile(r"\^\{?\\circ\}?|°"), ""),
     (re.compile(r"\\%|%"), ""),
     (re.compile(r"\$"), ""),
-    (re.compile(r"\\\\"), ""),
+    # `\\` is NOT stripped: it is the row separator of matrix answers (E0 G2 cross-check, 2026-10-05).
 ]
 
 
@@ -185,11 +185,17 @@ class MathVerifyGrader:
             return False
         if na == nb:
             return True
+        # Raw strings only when a normalised string does not parse (unchanged rule). A raw fallback after a failed
+        # normalised comparison was tried and rejected: degenerate raw parses then produced new false positives
+        # ('2007 + \frac\pi 2' == '2', a bare '-1' == a 2x2 matrix; E0 G2 follow-up, 2026-10-05).
         pa, pb = self._parsed(na), self._parsed(nb)
         if not pa or not pb:
             pa, pb = self._parsed(a), self._parsed(b)
         if not pa or not pb:
             return False
+        return self._verify_both(pa, pb)
+
+    def _verify_both(self, pa, pb) -> bool:
         kw = _filter_kwargs(self._verify, float_rounding=self.float_rounding, timeout_seconds=self.timeout_s)
         try:
             return bool(self._verify(pa, pb, **kw)) or bool(self._verify(pb, pa, **kw))

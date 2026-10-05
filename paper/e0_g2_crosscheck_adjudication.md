@@ -54,7 +54,9 @@ Prereg §7, G2: "cross-check against the Qwen2.5-Math grader on 200 base outputs
 
 ## Status
 
-Recorded 2026-10-05. The matrix false negative is a known defect awaiting a decision on a fix (proposed: keep `\\` in
-normalisation and let `equivalent` fall back to the raw strings when the normalised comparison fails, with regression
-tests on all matrix golds, then regrade the affected gate outputs). Logged in the prereg deviations log only if the
-grader is changed. G4 remains on hold until that decision.
+Recorded 2026-10-05. Fix approved and applied the same day: `normalize_answer` keeps `\\`. The proposed second part
+(raw-string fallback after a failed normalised comparison) was tested and **not** applied, because it introduced
+new false positives (`2007 + \frac\pi 2` accepted for gold `2`; a bare `-1` accepted for the 2×2 gold of
+`train/precalculus/1049`). 18 matrix regression tests in `tests/test_grader_matrix.py`; the `\phantom` gold of
+`train/precalculus/1049` stays ungradeable (known limitation, expected-fail test). Logged in the prereg deviations
+log. This cross-check is repeated on the fresh G1 outputs of E0 run 3; G4 waits for that.
