@@ -52,6 +52,29 @@ Prereg §7, G2: "cross-check against the Qwen2.5-Math grader on 200 base outputs
 - Not observed in the sample but noted while reproducing item 1: a prediction that spells out units
   (`15\text{ cm}^2`) is not accepted against `15\mbox{ cm}^2`. Untested exposure; flagged, not adjudicated.
 
+## E0 run 3 (final, after the matrix and currency fixes, commit 4af0d70)
+
+Same procedure, same seed, hence the same 200 items, on the fresh `FRESH=1` G1 outputs (pinned style
+`oneshot_rlvr_chat`, MATH-500 accuracy 0.630).
+
+| | count |
+|---|---|
+| correct (ours / Qwen) | 118 / 118 |
+| agreement | 198 (99.0%) |
+| disagreements | 2 (1.0%): 1 `equivalence`, 1 `rule_truncated` |
+| stored vs re-graded verdict mismatches / Qwen timeouts / swallowed grader exceptions | 0 / 0 / 0 |
+
+| item | ours | Qwen | correct grader | grader error? |
+|---|---|---|---|---|
+| `test/prealgebra/1114` (gold `15\mbox{ cm}^2`, output `\boxed{15}`) | correct | incorrect | **ours** | Qwen: its `strip_string` turns the gold into `15^2` |
+| `test/intermediate_algebra/1510` (truncated repetition loop, no box) | incorrect | correct | **ours** (pre-registered truncated / no-box rule) | Qwen: spurious last-number credit |
+
+`test/precalculus/625`, the run-2 matrix false negative, is in the same sample and now agrees (both correct), which
+confirms the `\\` fix on a real model output.
+
+**Result:** raw disagreement 1.0%, our-grader errors after adjudication **0/200**. The G2 cross-check criterion
+(≤ 2%, adjudicated) is met. Adjudicated 2026-10-05.
+
 ## Status
 
 Recorded 2026-10-05. Fix approved and applied the same day: `normalize_answer` keeps `\\`. The proposed second part
