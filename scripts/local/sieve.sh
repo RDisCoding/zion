@@ -9,6 +9,8 @@ if [[ ! -f results/e0/frozen_args.txt && "${FORCE:-0}" != 1 ]]; then
   echo "results/e0/frozen_args.txt missing: run GATES=g1,g2,g3,g5 scripts/local/e0_gates.sh first (or FORCE=1)"; exit 2
 fi
 load_frozen_args
+# prereg §5 eligibility list must be committed and match the rule before any outcome is measured
+run_logged pool_ineligible python -m rlvr_v2.cli pool-ineligible --config configs/study1.yaml --check
 run_logged sieve python -m rlvr_v2.cli sieve --config configs/study1.yaml --out results/pool ${EXTRA_ARGS:-}
 run_logged base_eval python -m rlvr_v2.cli eval --config configs/study1.yaml --tag base --out results/study1_base ${EXTRA_ARGS:-}
 run_logged select_candidates python scripts/select_candidates.py --signals results/pool/signals.jsonl \

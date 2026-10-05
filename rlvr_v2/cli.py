@@ -241,6 +241,36 @@ def cmd_smoke(args) -> None:
     log.info("smoke test ok: %s", json.dumps(report, default=str)[:800])
 
 
+POOL_INELIGIBLE_RULE = ("prereg §5: a Study-1 pool item is ineligible for candidate selection if its gold answer "
+                        "fails MathVerifyGrader.gold_parseable (math-verify parses it to an expression, and to a "
+                        "matrix when written as one); depends on gold answers only, fixed before the sieve")
+
+
+def compute_pool_ineligible(cfg: Config) -> dict:
+    from .candidates import unparseable_golds
+
+    pool = load_split_problems(cfg, ("pool",))["pool"]
+    return {"rule": POOL_INELIGIBLE_RULE, "pool_manifest": cfg.study1.pool_manifest, "n_pool": len(pool),
+            "items": unparseable_golds(pool, _grader())}
+
+
+def cmd_pool_ineligible(args) -> None:
+    cfg = _cfg(args)
+    report = compute_pool_ineligible(cfg)
+    path = _abs(args.out)
+    if args.check:
+        committed = read_json(path)
+        ids = [i["unique_id"] for i in report["items"]]
+        if committed is None or [i["unique_id"] for i in committed.get("items", [])] != ids:
+            sys.exit(f"{path} does not match the rule applied now ({ids}); it must be regenerated and logged in the "
+                     "prereg BEFORE the sieve, never after")
+        log.info("pool ineligibility list matches the rule: %s", ids)
+        return
+    atomic_write_json(path, report)
+    log.info("%d of %d pool items ineligible -> %s: %s", len(report["items"]), report["n_pool"], path,
+             [i["unique_id"] for i in report["items"]])
+
+
 def cmd_study2_jobs(args) -> None:
     from .curriculum import expand_study2_jobs
 
@@ -323,6 +353,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(s)
     s.add_argument("--out", default="manifests/study1_jobs.csv")
     s.set_defaults(func=cmd_study1_jobs)
+
+    s = sub.add_parser("pool-ineligible", help="write (or --check) the pool items with unparseable gold answers")
+    _add_common(s)
+    s.add_argument("--out", default="manifests/pool_ineligible.json")
+    s.add_argument("--check", action="store_true", help="verify the committed list instead of writing it")
+    s.set_defaults(func=cmd_pool_ineligible)
 
     s = sub.add_parser("study2-jobs", help="list Study-2 (arm, seed) jobs as CSV; --count prints only the number")
     _add_common(s)

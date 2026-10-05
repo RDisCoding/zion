@@ -115,14 +115,25 @@ def _replicate_ids(pairs: list[dict], anchors: list[str], count: int) -> list[st
     return out
 
 
-def select_candidates(signals: Sequence[Signals], cfg: Study1Cfg, rng_seed: int = 0) -> dict:
-    """Apply the pre-registered design to pool signals; see the module docstring for the rules."""
+def unparseable_golds(problems, grader) -> list[dict]:
+    """Pool items whose gold answer fails `grader.gold_parseable` (prereg §5 eligibility rule). Depends on the gold
+    answers only, never on model outputs, so it can be fixed before the sieve."""
+    return [{"unique_id": p.unique_id, "gold": p.answer} for p in sorted(problems, key=lambda p: p.unique_id)
+            if not grader.gold_parseable(p.answer)]
+
+
+def select_candidates(signals: Sequence[Signals], cfg: Study1Cfg, rng_seed: int = 0,
+                      ineligible: Sequence[str] = ()) -> dict:
+    """Apply the pre-registered design to pool signals; see the module docstring for the rules. `ineligible`
+    unique_ids (unparseable gold answers, fixed before the sieve) are removed before any anchor or pair is drawn."""
     if len(cfg.pairs_per_bin) != len(cfg.bins):
         raise ValueError("cfg.pairs_per_bin and cfg.bins must have the same length")
     rng = np.random.default_rng(rng_seed)
+    excluded = set(ineligible)
     by_uid: dict[str, Signals] = {}
     for s in signals:
-        by_uid[s.unique_id] = s
+        if s.unique_id not in excluded:
+            by_uid[s.unique_id] = s
     pool = [by_uid[u] for u in sorted(by_uid)]
     used: set[str] = set()
 
@@ -181,6 +192,7 @@ def select_candidates(signals: Sequence[Signals], cfg: Study1Cfg, rng_seed: int 
         "availability": availability,
         "bins": [[float(lo), float(hi)] for lo, hi in cfg.bins],
         "n_pool": len(pool),
+        "ineligible": sorted(excluded),
         "rng_seed": int(rng_seed),
         "config": dataclasses.asdict(cfg),
     }

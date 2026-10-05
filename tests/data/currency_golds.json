@@ -1,0 +1,37 @@
+[
+ {
+  "split": "pool",
+  "unique_id": "train/number_theory/500.json",
+  "gold": "\\$5.50"
+ },
+ {
+  "split": "pool",
+  "unique_id": "train/prealgebra/414.json",
+  "gold": "\\$3.50"
+ },
+ {
+  "split": "heldout",
+  "unique_id": "train/prealgebra/1817.json",
+  "gold": "\\$750"
+ },
+ {
+  "split": "heldout",
+  "unique_id": "train/algebra/875.json",
+  "gold": "\\$425"
+ },
+ {
+  "split": "math500",
+  "unique_id": "test/algebra/2626.json",
+  "gold": "\\$32,\\!348"
+ },
+ {
+  "split": "math500",
+  "unique_id": "test/algebra/2780.json",
+  "gold": "\\$18.90"
+ },
+ {
+  "split": "math500",
+  "unique_id": "test/prealgebra/1203.json",
+  "gold": "\\$36"
+ }
+]

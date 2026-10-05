@@ -1,0 +1,11 @@
+{
+ "rule": "prereg \u00a75: a Study-1 pool item is ineligible for candidate selection if its gold answer fails MathVerifyGrader.gold_parseable (math-verify parses it to an expression, and to a matrix when written as one); depends on gold answers only, fixed before the sieve",
+ "pool_manifest": "manifests/pool.json",
+ "n_pool": 500,
+ "items": [
+  {
+   "unique_id": "train/precalculus/1049.json",
+   "gold": "\\begin{pmatrix} 1 & -1 \\\\ 1 & \\phantom -1 \\end{pmatrix}"
+  }
+ ]
+}

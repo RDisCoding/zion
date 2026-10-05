@@ -60,6 +60,7 @@ _STRIP_PATTERNS = [
     (re.compile(r"\\(?:d|t)frac"), r"\\frac"),
     (re.compile(r"\^\{?\\circ\}?|°"), ""),
     (re.compile(r"\\%|%"), ""),
+    (re.compile(r"\\\$"), ""),  # escaped dollar (currency) as a unit, before plain `$` (2026-10-05)
     (re.compile(r"\$"), ""),
     # `\\` is NOT stripped: it is the row separator of matrix answers (E0 G2 cross-check, 2026-10-05).
 ]
@@ -81,6 +82,9 @@ def normalize_answer(s: str | None) -> str:
     if re.fullmatch(r"-?\d+\.\d*0+", out):
         out = out.rstrip("0").rstrip(".")
     return out
+
+
+_MATRIX_ENV = re.compile(r"\\begin\{[pbBvV]?matrix\}")
 
 
 def _filter_kwargs(fn, **kwargs):
@@ -218,6 +222,19 @@ class MathVerifyGrader:
 
     def is_correct(self, pred_text: str, gold_answer: str, truncated: bool = False) -> bool:
         return self.grade(pred_text, gold_answer, truncated).correct
+
+    def gold_parseable(self, gold: str) -> bool:
+        """Mechanical parseability check of a GOLD answer (prereg §5 pool-eligibility rule; not used for grading):
+        math-verify must parse it to an expression, and to a matrix when it is written as one. A gold failing
+        this can only ever be matched by exact string, so its measured P_s is an artifact."""
+        parsed = self._parsed(normalize_answer(gold)) or self._parsed(gold)
+        if not parsed or parsed[0] is None or isinstance(parsed[0], str):
+            return False
+        if _MATRIX_ENV.search(gold):
+            from sympy import MatrixBase
+
+            return isinstance(parsed[0], MatrixBase)
+        return True
 
 
 NONE_CLASS = -1

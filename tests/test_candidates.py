@@ -161,7 +161,20 @@ def test_cli_script(tmp_path):
     sys.modules["select_candidates"] = mod
     spec.loader.exec_module(mod)
     out = tmp_path / "cands.json"
+    first_zero = select_candidates(sigs, Study1Cfg(), rng_seed=3)["anchors_zero"][0]
+    inel = tmp_path / "pool_ineligible.json"
+    inel.write_text(json.dumps({"items": [{"unique_id": first_zero, "gold": "x"}]}))
     mod.main(["--signals", str(sig_path), "--pool-manifest", str(tmp_path / "pool.json"), "--no-base",
-              "--config", "--out", str(out), "--seed", "3"])
+              "--config", "--out", str(out), "--seed", "3", "--ineligible", str(inel), "--skip-recheck"])
     m = Manifest.load(out)
     assert len(m) == 2 + 2 + 2 * sum(Study1Cfg().pairs_per_bin) and len(m.meta["replicate_ids"]) == 8
+    assert first_zero not in m.ids
+
+
+def test_ineligible_items_are_never_selected():
+    sigs = _pool()
+    base = select_candidates(sigs, Study1Cfg(), rng_seed=3)
+    banned = base["anchors_zero"][:1] + [base["pairs"][0]["high"]]
+    sel = select_candidates(sigs, Study1Cfg(), rng_seed=3, ineligible=banned)
+    assert not set(banned) & set(sel["ordered_ids"])
+    assert sel["ineligible"] == sorted(banned) and sel["n_pool"] == base["n_pool"] - 2
