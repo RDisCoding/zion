@@ -44,6 +44,15 @@ truncation and stop tokens; G5 checks that two identical evals agree. The script
 all four `True`, `all_passed = False` (G4 has not run yet; that is correct). `results/e0/frozen_args.txt` now holds the
 pinned prompt style.
 
+### A2b. G2 grader cross-check against Qwen2.5-Math (CPU, ~10 min, needs internet once)
+```bash
+scripts/local/grader_crosscheck.sh
+```
+Grades 200 randomly sampled G1 base outputs (pinned style, seed 20261005) with our grader and with Qwen2.5-Math's
+own evaluation code (commit a45202b), run in an isolated environment at `~/envs/qwen_grader`, because Qwen's code pins
+sympy 1.12 / antlr4 4.11.1, which must not enter the rlvr_v2 environment. Send `results/e0/g2_crosscheck/summary.json`
+and `disagreements.jsonl`; every disagreement is adjudicated before G2 counts as complete and before G4 runs.
+
 ### A3. Positive control (1–8 h, stop/go point)
 ```bash
 GATES=g4 scripts/local/e0_gates.sh
