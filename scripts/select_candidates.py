@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from rlvr_v2.artifacts import read_json, read_jsonl  # noqa: E402
+from rlvr_v2.artifacts import read_jsonl  # noqa: E402
 from rlvr_v2.candidates import candidates_manifest, select_candidates, summarize_selection  # noqa: E402
 from rlvr_v2.config import load_config  # noqa: E402
 from rlvr_v2.data import Manifest  # noqa: E402
@@ -68,17 +68,9 @@ def main(argv: list[str] | None = None) -> None:
     if unknown:
         log.warning("%d signal records are not in the pool manifest and are ignored, e.g. %s", len(unknown), unknown[:3])
         signals = [s for s in signals if s.unique_id in pool.hashes]
-    committed = read_json(_abs(args.ineligible))
-    if committed is None:
-        sys.exit(f"{args.ineligible} missing: the pool eligibility list must be committed before selection")
-    ineligible = [i["unique_id"] for i in committed["items"]]
-    if not args.skip_recheck:
-        from rlvr_v2.cli import compute_pool_ineligible
+    from rlvr_v2.cli import load_pool_ineligible
 
-        now = [i["unique_id"] for i in compute_pool_ineligible(cfg)["items"]]
-        if now != ineligible:
-            sys.exit(f"committed ineligibility list {ineligible} differs from the rule applied now {now}; refusing")
-    log.info("ineligible pool items (unparseable gold, excluded before selection): %s", ineligible)
+    ineligible = load_pool_ineligible(cfg, _abs(args.ineligible), recheck=not args.skip_recheck)
     seed = cfg.run.seed if args.seed is None else args.seed
     selection = select_candidates(signals, cfg.study1, rng_seed=seed, ineligible=ineligible)
     print(summarize_selection(selection))

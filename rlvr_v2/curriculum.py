@@ -34,7 +34,7 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -157,6 +157,7 @@ class Curriculum:
         model=None,
         tokenizer=None,
         repeat_problem: Problem | None = None,
+        ineligible: Sequence[str] = (),
     ):
         if arm not in ARMS:
             raise ValueError(f"unknown arm {arm!r}; expected one of {ARMS}")
@@ -169,7 +170,9 @@ class Curriculum:
         self.arm = arm
         self.seed = int(seed)
         self.run_dir = run_dir
-        self.pool = list(pool)
+        # prereg §5/§6 eligibility rule: items with unparseable gold answers are never drawn (fixed before any run)
+        self.ineligible = sorted(set(ineligible))
+        self.pool = [p for p in pool if p.unique_id not in set(self.ineligible)]
         self.eval_problems = list(eval_problems)
         self.grader = grader
         self.model = model
@@ -481,7 +484,7 @@ def resolve_repeat_problem(cfg: Config, pool: list[Problem]) -> Problem | None:
 
 
 def run_study2_job(cfg: Config, index: int, pool: list[Problem], eval_problems: list[Problem], grader,
-                   repeat_problem: Problem | None = None) -> dict:
+                   repeat_problem: Problem | None = None, ineligible: Sequence[str] = ()) -> dict:
     """Run job `index` of `expand_study2_jobs(cfg)` (resumable) and return a small summary dict."""
     jobs = expand_study2_jobs(cfg)
     if index < 0 or index >= len(jobs):
@@ -492,7 +495,8 @@ def run_study2_job(cfg: Config, index: int, pool: list[Problem], eval_problems: 
         if repeat_problem is None:
             raise ValueError("arm 'repeat_one' requires cfg.study2.repeat_one_uid (or repeat_problem)")
     run_dir = RunDir(cfg, "study2", f"{arm}__seed{seed}")
-    cur = Curriculum(cfg, arm, seed, run_dir, pool, eval_problems, grader, repeat_problem=repeat_problem)
+    cur = Curriculum(cfg, arm, seed, run_dir, pool, eval_problems, grader, repeat_problem=repeat_problem,
+                     ineligible=ineligible)
     try:
         state = cur.run()
     except Exception as e:

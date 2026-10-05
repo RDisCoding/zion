@@ -202,7 +202,9 @@ def cmd_curriculum(args) -> None:
         else:
             repeat = next((p for p in splits["pool"] if p.unique_id == cfg.study2.repeat_one_uid), None)
     run_dir = RunDir(cfg, "study2", f"{arm}__seed{seed}")
-    cur = Curriculum(cfg, arm, seed, run_dir, splits["pool"], splits["math500"], _grader(), repeat_problem=repeat)
+    ineligible = load_pool_ineligible(cfg)
+    cur = Curriculum(cfg, arm, seed, run_dir, splits["pool"], splits["math500"], _grader(), repeat_problem=repeat,
+                     ineligible=ineligible)
     cur.run()
     log.info("curriculum %s seed %d finished -> %s", arm, seed, run_dir.path)
 
@@ -253,6 +255,22 @@ def compute_pool_ineligible(cfg: Config) -> dict:
     pool = load_split_problems(cfg, ("pool",))["pool"]
     return {"rule": POOL_INELIGIBLE_RULE, "pool_manifest": cfg.study1.pool_manifest, "n_pool": len(pool),
             "items": unparseable_golds(pool, _grader())}
+
+
+def load_pool_ineligible(cfg: Config, path: str | Path = "manifests/pool_ineligible.json",
+                         recheck: bool = True) -> list[str]:
+    """Committed pool-eligibility list (prereg §5/§6). With `recheck`, refuses to continue if the rule applied now
+    does not reproduce it, so the list can never drift after outcomes exist."""
+    committed = read_json(_abs(path))
+    if committed is None:
+        sys.exit(f"{path} missing: the pool eligibility list must be committed before selection or Study 2")
+    ids = [i["unique_id"] for i in committed.get("items", [])]
+    if recheck:
+        now = [i["unique_id"] for i in compute_pool_ineligible(cfg)["items"]]
+        if now != ids:
+            sys.exit(f"committed ineligibility list {ids} differs from the rule applied now {now}; refusing")
+    log.info("ineligible pool items (unparseable gold, never selected): %s", ids)
+    return ids
 
 
 def cmd_pool_ineligible(args) -> None:

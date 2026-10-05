@@ -301,3 +301,16 @@ def test_expand_study2_jobs(tmp_path):
     jobs = cur.expand_study2_jobs(cfg)
     assert len(jobs) == 6 and [j["index"] for j in jobs] == list(range(6))
     assert jobs[0] == {"index": 0, "arm": "random", "seed": 1} and jobs[3] == {"index": 3, "arm": "variance", "seed": 1}
+
+
+def test_ineligible_pool_items_are_never_drawn(tmp_path, mk_signals, grader, monkeypatch):
+    """prereg §6: the pool-eligibility rule applies to Study 2 as well."""
+    cfg = small_cfg(tmp_path)
+    install(monkeypatch, Fakes(mk_signals))
+    banned = [f"math_train/p{i}" for i in range(0, 40, 2)]  # half the pool
+    run_dir = RunDir(cfg, "study2", f"random__seed{SEED}")
+    c = cur.Curriculum(cfg, "random", SEED, run_dir, make_pool(), eval_problems(), grader, ineligible=banned)
+    assert len(c.pool) == 20 and not {p.unique_id for p in c.pool} & set(banned)
+    state = c.run()
+    drawn = set(state["used_ids"]) | {h["selected_uid"] for h in state["history"]}
+    assert drawn and not drawn & set(banned)
