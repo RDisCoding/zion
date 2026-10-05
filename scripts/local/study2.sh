@@ -4,7 +4,7 @@
 #   scripts/local/study2.sh            # all arms x seeds (3 x 3 = 9 by default)
 #   scripts/local/study2.sh 0 2        # jobs 0..2 only
 # Add the learned arm only if the Study-1 gate passed:
-#   EXTRA_ARGS="$(cat results/e0/frozen_args.txt) --override study2.arms=[random,variance,disagreement,learned]" scripts/local/study2.sh
+#   EXTRA_ARGS="--override study2.arms=[random,variance,disagreement,learned]" scripts/local/study2.sh
 source "$(dirname "$0")/common.sh"
 require_gates
 load_frozen_args

@@ -8,7 +8,7 @@
 # is recorded and the loop continues (array tasks are independent); the script exits 1 at the end if any failed.
 # This takes days: run it inside tmux/screen, or `nohup scripts/local/study1.sh > results/local/study1_nohup.log 2>&1 &`.
 # To also score the held-out train slice (pre-registered sign check):
-#   EXTRA_ARGS="$(cat results/e0/frozen_args.txt) --heldout" scripts/local/study1.sh
+#   EXTRA_ARGS="--heldout" scripts/local/study1.sh        (frozen gate overrides are always applied too)
 source "$(dirname "$0")/common.sh"
 test -f manifests/study1_jobs.csv || { echo "manifests/study1_jobs.csv missing: run scripts/local/sieve.sh first"; exit 2; }
 require_gates

@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--signals", default="results/pool/signals.jsonl")
     ap.add_argument("--pool-manifest", default="manifests/pool.json")
     ap.add_argument("--config", nargs="*", default=["configs/study1.yaml"])
-    ap.add_argument("--override", nargs="*", default=[])
+    ap.add_argument("--override", nargs="*", action="extend", default=[])
     ap.add_argument("--no-base", action="store_true", help="do not merge configs/base.yaml first")
     ap.add_argument("--out", default=None, help="defaults to study1.candidates_manifest from the config")
     ap.add_argument("--seed", type=int, default=None, help="RNG seed for tie-breaks (default run.seed)")

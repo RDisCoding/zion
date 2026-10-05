@@ -28,7 +28,7 @@ every later run:
 - `gen.hf_batch_size` = the largest batch size that ran without out-of-memory in the benchmark;
 - `train.per_device_train_batch_size` = 8 if the probe fit (peak memory comfortably under 32 GB), else 4.
 
-If the probe hits out-of-memory, re-run it with the smaller batch: `EXTRA_ARGS="--override train.per_device_train_batch_size=4" PROBE_STEPS=3 scripts/local/bench.sh`.
+`train.per_device_train_batch_size` is frozen at 4 in `configs/base.yaml` (2026-10-05: 8 ran out of memory on the 32 GB RTX PRO 4500; 4 peaked at ~19.9 GB and is the setting G4 passed with). Do not override it.
 Whatever we pick goes into **every** later command through `EXTRA_ARGS` and never changes mid-study (it is part of the
 config hash that groups runs).
 
@@ -77,7 +77,7 @@ scripts/local/study1.sh                 # all 40 jobs, sequentially; Ctrl-b d to
 Each job is its own process: fresh base model, fresh LoRA, R rounds of G = 64, MATH-500 eval. Progress:
 `grep -l '"state": "done"' results/study1/*/*/status.json | wc -l`. After any interruption just run the same command
 again. Optional held-out sign check (one extra eval per job):
-`EXTRA_ARGS="$(cat results/e0/frozen_args.txt) --heldout" scripts/local/study1.sh`.
+`EXTRA_ARGS="--heldout" scripts/local/study1.sh` (the frozen gate overrides in `results/e0/frozen_args.txt` are always applied; `EXTRA_ARGS` is appended to them, and repeated `--override` flags accumulate).
 
 **Time check.** One job ≈ R × (seconds per round from the probe) + two evals (from the benchmark). With 40 jobs on one
 GPU this is the critical path for the 12 Oct deadline. If the projection does not finish by 9 Oct, tell me *before*

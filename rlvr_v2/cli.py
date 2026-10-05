@@ -27,7 +27,8 @@ def _abs(p: str | Path) -> Path:
 
 def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--config", nargs="*", default=[], help="YAML files merged left to right after base.yaml")
-    p.add_argument("--override", nargs="*", default=[], help="dotted overrides, e.g. train.rounds=50")
+    p.add_argument("--override", nargs="*", action="extend", default=[],
+                   help="dotted overrides, e.g. train.rounds=50 (repeatable; later values win per key)")
     p.add_argument("--no-base", action="store_true", help="do not merge configs/base.yaml first")
     p.add_argument("-v", "--verbose", action="store_true")
 

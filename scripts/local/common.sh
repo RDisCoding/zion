@@ -28,13 +28,15 @@ run_logged() {
   return "${PIPESTATUS[0]}"
 }
 
-# Gate-frozen overrides (pinned prompt style from G1, training budget from G4) unless EXTRA_ARGS was set explicitly.
+# Gate-frozen overrides (pinned prompt style from G1, training budget from G4) are ALWAYS applied; anything in
+# EXTRA_ARGS is appended after them (e.g. EXTRA_ARGS="--heldout"). Repeated --override flags accumulate.
 load_frozen_args() {
-  if [[ -z "${EXTRA_ARGS+x}" && -f results/e0/frozen_args.txt ]]; then
-    EXTRA_ARGS="$(cat results/e0/frozen_args.txt)"
+  local frozen=""
+  if [[ -f results/e0/frozen_args.txt ]]; then
+    frozen="$(cat results/e0/frozen_args.txt)"
   fi
-  EXTRA_ARGS="${EXTRA_ARGS:-}"
-  log "EXTRA_ARGS: ${EXTRA_ARGS:-<none>}"
+  EXTRA_ARGS="${frozen} ${EXTRA_ARGS:-}"
+  log "frozen: ${frozen:-<none>} | extra: ${EXTRA_ARGS#"$frozen "}"
 }
 
 # Same rule the Python CLI enforces, checked once up front so a 40-job loop does not load a model to fail 40 times.
