@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 
 from ..artifacts import atomic_write_json, read_json
-from .spec import CONFIG_DIR, load_profile
+from .spec import CONFIG_DIR, load_profile, results_root
 
 log = logging.getLogger(__name__)
 
@@ -86,12 +86,11 @@ def run_smoke(profile: str, gpu: bool = False, out_dir: Path | None = None, over
     summary["resume_check"] = "ok"
     summary["runs"] = {arm: {"step_done": s["step_done"], "evals": s["evals"],
                              "picks": [h["selection"].get("selected_uid") for h in s["history"]]} for arm, s in states.items()}
-    summary["report"] = str(build_report([spec], out_dir=(out_dir or Path(spec.run.results_root)) / "report"))
+    summary["report"] = str(build_report([spec], out_dir=results_root(spec) / "report"))
     if gpu:
         full = load_profile(profile)
         summary["projection"] = projection(spec, redo, summary["base_eval"], full)
-    path = Path(spec.run.results_root) if Path(spec.run.results_root).is_absolute() else None
-    out = (path or (out_dir or Path("."))) / f"smoke_{profile}.json"
+    out = results_root(spec) / f"smoke_{profile}.json"  # inside the smoke's own results root, never the cwd
     atomic_write_json(out, summary)
     log.info("smoke %s ok -> %s\n%s", profile, out, json.dumps({k: v for k, v in summary.items() if k != "base_eval"},
                                                                indent=1, default=str)[:3000])

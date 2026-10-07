@@ -7,6 +7,7 @@ results/
 !results/.gitkeep
 results_sgac/
 results_sgac_smoke/
+/smoke_*.json
 *.safetensors
 *.bin
 *.pt
