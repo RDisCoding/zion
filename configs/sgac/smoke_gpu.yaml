@@ -1,0 +1,4 @@
+# T0 GPU smoke (merged after the profile file): the real model and caps, 2 curriculum steps, 5 items per eval,
+# MATH-500 at steps 0 and 2, separate results root. Its timings give the queue projection.
+loop: {steps: 2, eval_every: 1, math500_steps: [0, 2], eval_max_items: 5}
+run: {results_root: results_sgac_smoke, seeds: [42], arms: [sgac, random]}

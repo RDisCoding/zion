@@ -1,0 +1,18 @@
+# CPU smoke for either profile (merged after the profile file): tiny model, tiny lengths, 2 steps, no MATH-500.
+# Plumbing and record schemas only; run by `python -m rlvr_v2.sgac smoke --profile <p>` (temp results/manifests).
+model:
+  name: HuggingFaceTB/SmolLM2-135M-Instruct
+  revision: null
+  pi1_name: HuggingFaceTB/SmolLM2-135M-Instruct
+lora: {r: 4, alpha: 8, dropout: 0.0, target_modules: [q_proj, k_proj, v_proj, o_proj]}
+profile:
+  max_prompt_tokens: 1024
+  sieve_max_new_tokens: 16
+  eval_max_new_tokens: 16
+  grpo_max_completion_length: 12
+  sieve_batch_size: 8
+  eval_batch_size: 4
+  eval_prompts_per_call: 8
+loop: {steps: 2, batch_b: 4, k: 2, eval_every: 1, math500_steps: [], eval_max_items: 3}
+grpo: {gradient_checkpointing: false}
+run: {seeds: [0], arms: [sgac, random]}

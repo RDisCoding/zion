@@ -1,0 +1,26 @@
+# PRIMARY profile: the E0-validated substrate (prereg-v1 frozen settings) running the original SGAC recipe.
+# bf16, oneshot_rlvr_chat (E0 G1 pin), math-verify grader (E0 G2), stops <|endoftext|> + <|im_end|> with pad
+# <|fim_pad|> (E0 G3), and E0's frozen 3072-token cap for sieve rollouts, GRPO completions and evaluation.
+profile:
+  name: e0
+  quant: none
+  dtype: bf16
+  compute_dtype: fp16
+  pi1_dtype: bf16
+  prompt: oneshot_rlvr_chat
+  train_prompt: rendered
+  tokenizer_pad: fim_pad
+  stops: style
+  grader: math_verify
+  d_metric: u_ratio
+  # E0's 1024 is a refuse-not-truncate guard; one original pool item (row 398, test/counting_and_probability/670,
+  # 1379 prompt tokens; drawn by seed 44) exceeds it. Raised so the original pool stays intact (no other item > 938).
+  max_prompt_tokens: 2048
+  sieve_max_new_tokens: 3072
+  eval_max_new_tokens: 3072
+  grpo_max_completion_length: 3072
+  sieve_top_k: 0
+  sieve_batch_size: 16
+  eval_batch_size: 32
+  eval_prompts_per_call: 64
+  test50_batch_check: false

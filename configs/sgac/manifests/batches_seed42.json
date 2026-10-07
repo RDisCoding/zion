@@ -1,0 +1,311 @@
+{
+ "seed": 42,
+ "steps": 20,
+ "batch_size": 4,
+ "n_pool": 1000,
+ "rule": "random.Random(seed).sample(remaining, batch_size); all batch rows removed after each step",
+ "python": "3.11.4",
+ "created": "2026-10-07T13:15:33Z",
+ "batches": [
+  {
+   "step": 1,
+   "rows": [
+    654,
+    114,
+    25,
+    759
+   ],
+   "unique_ids": [
+    "train/geometry/984.json",
+    "train/geometry/721.json",
+    "train/counting_and_probability/5063.json",
+    "train/number_theory/800.json"
+   ]
+  },
+  {
+   "step": 2,
+   "rows": [
+    283,
+    252,
+    230,
+    144
+   ],
+   "unique_ids": [
+    "train/precalculus/175.json",
+    "test/geometry/0.json",
+    "test/intermediate_algebra/984.json",
+    "train/intermediate_algebra/541.json"
+   ]
+  },
+  {
+   "step": 3,
+   "rows": [
+    762,
+    105,
+    699,
+    766
+   ],
+   "unique_ids": [
+    "train/counting_and_probability/949.json",
+    "test/counting_and_probability/247.json",
+    "train/algebra/778.json",
+    "train/number_theory/906.json"
+   ]
+  },
+  {
+   "step": 4,
+   "rows": [
+    925,
+    565,
+    90,
+    611
+   ],
+   "unique_ids": [
+    "test/algebra/1293.json",
+    "test/intermediate_algebra/1475.json",
+    "train/prealgebra/71.json",
+    "train/prealgebra/597.json"
+   ]
+  },
+  {
+   "step": 5,
+   "rows": [
+    440,
+    33,
+    31,
+    97
+   ],
+   "unique_ids": [
+    "train/prealgebra/601.json",
+    "test/prealgebra/1299.json",
+    "test/precalculus/1090.json",
+    "train/intermediate_algebra/283.json"
+   ]
+  },
+  {
+   "step": 6,
+   "rows": [
+    232,
+    247,
+    529,
+    630
+   ],
+   "unique_ids": [
+    "train/algebra/2115.json",
+    "test/geometry/710.json",
+    "test/algebra/1443.json",
+    "train/intermediate_algebra/1954.json"
+   ]
+  },
+  {
+   "step": 7,
+   "rows": [
+    28,
+    590,
+    211,
+    753
+   ],
+   "unique_ids": [
+    "test/algebra/1345.json",
+    "test/algebra/2559.json",
+    "test/algebra/2378.json",
+    "test/intermediate_algebra/1974.json"
+   ]
+  },
+  {
+   "step": 8,
+   "rows": [
+    687,
+    741,
+    576,
+    445
+   ],
+   "unique_ids": [
+    "train/number_theory/94.json",
+    "train/intermediate_algebra/1489.json",
+    "test/algebra/1043.json",
+    "test/geometry/454.json"
+   ]
+  },
+  {
+   "step": 9,
+   "rows": [
+    237,
+    476,
+    625,
+    299
+   ],
+   "unique_ids": [
+    "train/algebra/179.json",
+    "train/algebra/1537.json",
+    "test/intermediate_algebra/82.json",
+    "test/prealgebra/1195.json"
+   ]
+  },
+  {
+   "step": 10,
+   "rows": [
+    863,
+    926,
+    6,
+    812
+   ],
+   "unique_ids": [
+    "train/number_theory/371.json",
+    "train/algebra/2269.json",
+    "train/intermediate_algebra/369.json",
+    "test/number_theory/14.json"
+   ]
+  },
+  {
+   "step": 11,
+   "rows": [
+    862,
+    173,
+    746,
+    452
+   ],
+   "unique_ids": [
+    "train/geometry/240.json",
+    "train/algebra/316.json",
+    "test/counting_and_probability/688.json",
+    "train/counting_and_probability/133.json"
+   ]
+  },
+  {
+   "step": 12,
+   "rows": [
+    367,
+    303,
+    169,
+    234
+   ],
+   "unique_ids": [
+    "train/intermediate_algebra/995.json",
+    "train/algebra/2083.json",
+    "train/prealgebra/911.json",
+    "train/prealgebra/1527.json"
+   ]
+  },
+  {
+   "step": 13,
+   "rows": [
+    825,
+    366,
+    112,
+    101
+   ],
+   "unique_ids": [
+    "test/intermediate_algebra/1952.json",
+    "train/algebra/1654.json",
+    "train/number_theory/952.json",
+    "train/intermediate_algebra/1236.json"
+   ]
+  },
+  {
+   "step": 14,
+   "rows": [
+    415,
+    108,
+    393,
+    917
+   ],
+   "unique_ids": [
+    "test/geometry/134.json",
+    "test/intermediate_algebra/182.json",
+    "test/prealgebra/447.json",
+    "train/counting_and_probability/1111.json"
+   ]
+  },
+  {
+   "step": 15,
+   "rows": [
+    379,
+    659,
+    293,
+    879
+   ],
+   "unique_ids": [
+    "test/algebra/1623.json",
+    "train/prealgebra/867.json",
+    "train/intermediate_algebra/1919.json",
+    "test/algebra/1806.json"
+   ]
+  },
+  {
+   "step": 16,
+   "rows": [
+    49,
+    799,
+    505,
+    587
+   ],
+   "unique_ids": [
+    "train/geometry/348.json",
+    "train/intermediate_algebra/1546.json",
+    "train/counting_and_probability/961.json",
+    "train/number_theory/956.json"
+   ]
+  },
+  {
+   "step": 17,
+   "rows": [
+    140,
+    419,
+    86,
+    607
+   ],
+   "unique_ids": [
+    "test/counting_and_probability/789.json",
+    "test/number_theory/876.json",
+    "train/prealgebra/1358.json",
+    "test/counting_and_probability/498.json"
+   ]
+  },
+  {
+   "step": 18,
+   "rows": [
+    329,
+    914,
+    695,
+    684
+   ],
+   "unique_ids": [
+    "test/algebra/156.json",
+    "train/algebra/1167.json",
+    "test/intermediate_algebra/1626.json",
+    "test/geometry/780.json"
+   ]
+  },
+  {
+   "step": 19,
+   "rows": [
+    978,
+    954,
+    404,
+    641
+   ],
+   "unique_ids": [
+    "test/intermediate_algebra/1786.json",
+    "train/number_theory/402.json",
+    "train/geometry/807.json",
+    "train/precalculus/727.json"
+   ]
+  },
+  {
+   "step": 20,
+   "rows": [
+    215,
+    785,
+    77,
+    52
+   ],
+   "unique_ids": [
+    "test/algebra/2361.json",
+    "train/counting_and_probability/707.json",
+    "train/counting_and_probability/941.json",
+    "train/algebra/1853.json"
+   ]
+  }
+ ]
+}

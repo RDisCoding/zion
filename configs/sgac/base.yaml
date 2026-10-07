@@ -1,0 +1,59 @@
+# SGAC reproduction: settings shared by both profiles (the original recipe). Profile files override `profile:`.
+# Separate from configs/{base,e0,study1,study2}.yaml on purpose: nothing here enters the prereg config hashes.
+model:
+  name: Qwen/Qwen2.5-Math-1.5B
+  revision: null            # cached main revision (as in E0); the resolved commit is recorded in every run.json
+  attn_impl: sdpa
+  pi1_name: ypwang61/One-Shot-RLVR-Qwen2.5-Math-1.5B-pi1
+  pi1_revision: null
+lora:                       # NB-M cell 5
+  r: 16
+  alpha: 32
+  dropout: 0.0
+  target_modules: [q_proj, k_proj, v_proj, o_proj]
+data:                       # NB-M cell 4; revision = the one that reproduces the printed phase-4 levels
+  dataset: nlile/hendrycks-MATH-benchmark
+  revision: 465bcdb36f5962aa3512891498966df785fc3c18
+  split: train
+  shuffle_seed: 42
+  pool: [0, 1000]
+  test: [1000, 1050]
+  phase1_candidates: [0, 4]
+  phase1_test: [4, 14]
+  math500_manifest: manifests/math500.json
+  manifest_dir: configs/sgac/manifests
+loop:                       # NB-M cells 6-7: B=4 candidates, K=4 rollouts, 20 steps, eval every 5 steps
+  steps: 20
+  batch_b: 4
+  k: 4
+  temperature: 1.0
+  top_p: 1.0
+  eval_every: 5
+  math500_steps: [0, 20]
+grpo:                       # NB-M cell 7 explicit values + TRL 1.0.0 defaults for everything it left unset
+  learning_rate: 2.0e-5
+  per_device_train_batch_size: 1
+  generation_batch_size: 4
+  num_generations: 4
+  max_steps: 5
+  logging_steps: 1
+  temperature: 1.0
+  top_p: 1.0
+  top_k: 0
+  beta: 0.0
+  num_iterations: 1
+  epsilon: 0.2
+  loss_type: dapo
+  scale_rewards: group
+  mask_truncated_completions: false
+  lr_scheduler_type: linear
+  warmup_steps: 0
+  optim: adamw_torch_fused
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  gradient_checkpointing: true
+  format_weight: 0.5
+run:
+  results_root: results_sgac
+  seeds: [42, 43, 44]
+  arms: [sgac, random, max_var, max_d, max_level]

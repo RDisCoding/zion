@@ -1,0 +1,26 @@
+# SECONDARY fidelity profile: the historical Kaggle run (NB-M) as it actually executed.
+# 4-bit NF4 + fp16 compute (bf16 fallback, recorded, if bitsandbytes cannot load on this GPU); the raw legacy
+# instruction for sieve/eval and a one-message conversation for GRPO (TRL applies the Qwen chat template);
+# pad = eos = <|endoftext|>, <|im_end|> is not a stop; the verbatim legacy grader / rewards / disagreement;
+# sieve and eval capped at 1024 tokens, GRPO at TRL 1.0.0's default 256 (NB-M never set it); sieve top_k=50.
+profile:
+  name: as_run
+  quant: nf4
+  dtype: bf16
+  compute_dtype: fp16
+  pi1_dtype: fp16
+  prompt: legacy
+  train_prompt: conversational
+  tokenizer_pad: eos
+  stops: eos_only
+  grader: legacy
+  d_metric: legacy_str
+  max_prompt_tokens: 2048  # NB-M had no prompt limit; one pool item has 1383 prompt tokens (see e0.yaml)
+  sieve_max_new_tokens: 1024
+  eval_max_new_tokens: 1024
+  grpo_max_completion_length: 256
+  sieve_top_k: 50
+  sieve_batch_size: 16
+  eval_batch_size: 16     # test50: batch 1 (NB-M) vs 16 agreement rule C3 decides; MATH-500 always 16
+  eval_prompts_per_call: 64
+  test50_batch_check: true

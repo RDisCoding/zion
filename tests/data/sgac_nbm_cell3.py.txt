@@ -1,0 +1,79 @@
+# Extraction logic
+def extract_box(text):
+    match = re.search(r'\\boxed{', text)
+    if not match: return None
+    start = match.end()
+    open_braces = 1
+    for i, char in enumerate(text[start:]):
+        if char == '{': open_braces += 1
+        elif char == '}': open_braces -= 1
+        if open_braces == 0: return text[start:start+i]
+    return text[start:]
+
+def extract_answer(text):
+    match = extract_box(text)
+    if match is not None: return match.strip()
+    numbers = re.findall(r'-?\d+\.?\d*', text)
+    return numbers[-1].strip() if numbers else None
+
+def extract_gt(gt_text):
+    match = extract_box(gt_text)
+    return match.strip() if match else gt_text.strip()
+
+# Reward Functions for GRPO
+def binary_match_reward(completions, **kwargs):
+    answers = kwargs.get('solution', [])
+    rewards = []
+    import sympy
+    from sympy.parsing.latex import parse_latex
+    
+    for comp, gt in zip(completions, answers):
+        comp_text = comp[0]['content'] if isinstance(comp, list) else comp
+        pred = extract_answer(comp_text)
+        if pred is None:
+            rewards.append(0.0)
+            continue
+        pred_cl = str(pred).strip()
+        gt_cl = str(extract_gt(gt)).strip()
+        if pred_cl.replace(' ', '') == gt_cl.replace(' ', ''):
+            rewards.append(1.0)
+            continue
+        try:
+            if sympy.simplify(parse_latex(pred_cl) - parse_latex(gt_cl)) == 0:
+                rewards.append(1.0)
+            else:
+                rewards.append(0.0)
+        except Exception:
+            rewards.append(1.0 if pred_cl.replace(' ','') == gt_cl.replace(' ','') else 0.0)
+    return rewards
+
+def format_reward(completions, **kwargs):
+    return [0.5 if '\\boxed{' in (c[0]['content'] if isinstance(c, list) else c) else 0.0 for c in completions]
+
+REWARD_FUNCTIONS = [binary_match_reward, format_reward]
+
+def is_correct(pred, gt):
+    if pred is None: return False
+    pred_cl = str(pred).strip()
+    gt_cl = str(extract_gt(gt)).strip()
+    if pred_cl.replace(' ', '') == gt_cl.replace(' ', ''): return True
+    try:
+        return sympy.simplify(parse_latex(pred_cl) - parse_latex(gt_cl)) == 0
+    except:
+        return pred_cl.replace(' ','') == gt_cl.replace(' ','')
+
+def evaluate_model_acc(model, tokenizer, eval_dataset):
+    correct, total = 0, 0
+    model.eval()
+    for sample in eval_dataset:
+        prompt = sample["prompt"][0]["content"]
+        gt = sample["solution"]
+        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+        with torch.no_grad():
+            outputs = model.generate(**inputs, max_new_tokens=1024, do_sample=False, pad_token_id=tokenizer.eos_token_id)
+        response = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
+        pred = extract_answer(response)
+        if is_correct(pred, gt): correct += 1
+        total += 1
+    model.train()
+    return correct / total
