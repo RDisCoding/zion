@@ -545,6 +545,29 @@ def profile_section(col: dict, out_dir: Path) -> tuple[str, dict]:
                          pct(diag["nbm_original"]["d_ge_075"]), pct(diag["nbm_original"]["zero_loss_bursts"]), "—", "—", "—"]]),
            ""]
 
+    # --- optional Phase-1 replication (paper Table 1 / Table 6)
+    p1 = read_json(col["group"] / "phase1" / "phase1_summary.json")
+    if p1:
+        data["phase1"] = p1
+        rows = []
+        for c, paper in zip(p1["candidates"], nbm.PHASE1_TABLE1):
+            s = c["signals"]
+            rows.append([f"#{c['idx']} {c['unique_id']}", _f(s["Ps"]), _f(s["Var"]), _f(s["D"]), s["L"],
+                         pct(c["acc_test10"]), pct(c.get("acc_math500")),
+                         f"{paper['Ps']} / {paper['Var']} / {paper['D']} / L{paper['L']} / {pct(paper['acc'])}"])
+        strat = p1.get("strategies_test10") or {}
+        srows = [[k, str(v.get("idx", "—")), str(v.get("ties", "")), pct(v.get("acc")),
+                  pct(((p1.get("strategies_math500") or {}).get(k) or {}).get("acc"))] for k, v in strat.items()]
+        fit = p1.get("four_row_fit_test10") or {}
+        md += ["### Phase-1 replication (paper Table 1 / Table 6; 10-item test set, so 1 item = 10 points)", "",
+               f"Base model on the 10 items: {pct(p1.get('base_test10'))}%.", "",
+               _md_table(["Candidate", "Ps", "Var", "D", "Level", "Acc test10", "Acc MATH-500",
+                          "Paper Table 1 (Ps / Var / D / L / acc)"], rows), "",
+               _md_table(["Strategy", "Pick", "Ties", "Acc test10", "Acc MATH-500"], srows), "",
+               f"4-row fit (never used; rank {fit.get('rank')} with 5 parameters): true mapping "
+               f"{ {k: round(v, 4) for k, v in (fit.get('true_mapping') or {}).items()} }, as the notebook would print it "
+               f"{ {k: round(v, 4) for k, v in (fit.get('as_printed_by_notebook') or {}).items()} }.", ""]
+
     # --- F. runtime
     rt = runtime(col)
     data["runtime"] = rt

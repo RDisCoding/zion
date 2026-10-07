@@ -52,7 +52,9 @@ def summarize(rows: Sequence[dict], meta: dict, wall_s: float) -> dict:
 
 
 def evaluate_items(sampler, tok, items: Sequence[SgacItem], spec: SgacSpec, grader: DualGrader, out_dir: Path,
-                   tag: str, policy: str, adapter_ref: str | None = None, force: bool = False) -> dict:
+                   tag: str, policy: str, adapter_ref: str | None = None, force: bool = False,
+                   render=None, prompt_name: str | None = None) -> dict:
+    """`render(item) -> str` overrides the profile's prompt (Phase-1 used its own eval prompt)."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     items = list(items)
@@ -61,10 +63,11 @@ def evaluate_items(sampler, tok, items: Sequence[SgacItem], spec: SgacSpec, grad
     n = len(items)
     if n == 0:
         raise ValueError("no items to evaluate")
-    rendered = [render_prompt(it, spec, tok) for it in items]
+    rendered = [render(it) if render else render_prompt(it, spec, tok) for it in items]
     desc = sampler.describe() if hasattr(sampler, "describe") else {}
     meta = {"tag": tag, "policy": policy, "adapter_ref": adapter_ref, "profile": spec.profile.name,
-            "grader_primary": grader.primary, "prompt": spec.profile.prompt, "prompt_hash_first": prompt_hash(rendered[0]),
+            "grader_primary": grader.primary, "prompt": prompt_name or spec.profile.prompt,
+            "prompt_hash_first": prompt_hash(rendered[0]),
             "max_new_tokens": desc.get("max_new_tokens"), "batch_size": desc.get("batch_size"),
             "stop_token_ids": desc.get("stop_token_ids"), "prompts_per_call": int(spec.profile.eval_prompts_per_call),
             "n": n, "uids_hash": prompt_hash("\n".join(it.unique_id for it in items))}
