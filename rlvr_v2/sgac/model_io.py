@@ -97,7 +97,7 @@ def load_policy_model(spec: SgacSpec) -> tuple[Any, dict]:
                                                          quantization_config=_bnb_config(spec), **kwargs)
             record.update(effective="nf4", bitsandbytes=getattr(bitsandbytes, "__version__", "?"),
                           compute_dtype=p.compute_dtype)
-            return _finish_load(model, record)
+            return _finish_load(model, record, spec.model.name, spec.model.revision)
         except Exception as e:  # noqa: BLE001 - any failure means the profile's documented fallback
             record["fallback"] = f"nf4 unavailable ({type(e).__name__}: {str(e)[:300]}); loaded bf16"
             log.warning("as_run: %s", record["fallback"])
@@ -108,12 +108,23 @@ def load_policy_model(spec: SgacSpec) -> tuple[Any, dict]:
         kwargs.update(dtype=_DTYPES[p.dtype], device_map="auto")
         record["effective"] = p.dtype
     model = AutoModelForCausalLM.from_pretrained(spec.model.name, **kwargs)
-    return _finish_load(model, record)
+    return _finish_load(model, record, spec.model.name, spec.model.revision)
 
 
-def _finish_load(model, record: dict):
+def cached_snapshot(repo_id: str, revision: str | None) -> str | None:
+    """Commit hash of the locally cached snapshot that was loaded (model and tokenizer files come from it);
+    transformers 5.x no longer stamps `_commit_hash` on the config when loading offline."""
+    try:
+        from huggingface_hub import snapshot_download
+
+        return Path(snapshot_download(repo_id, revision=revision, local_files_only=True)).name
+    except Exception:  # noqa: BLE001 - provenance only, never fatal
+        return None
+
+
+def _finish_load(model, record: dict, name: str, revision: str | None):
     model.config.use_cache = True
-    record["commit"] = getattr(model.config, "_commit_hash", None)
+    record["commit"] = getattr(model.config, "_commit_hash", None) or cached_snapshot(name, revision)
     record["param_dtype"] = str(next(model.parameters()).dtype)
     record["device"] = str(device_of(model))
     log.info("loaded policy base: %s", record)
@@ -131,8 +142,8 @@ def load_pi1_model(spec: SgacSpec):
     model = AutoModelForCausalLM.from_pretrained(spec.model.pi1_name, revision=spec.model.pi1_revision,
                                                  attn_implementation=spec.model.attn_impl, **kw)
     model.config.use_cache = True
-    return model, {"name": spec.model.pi1_name, "commit": getattr(model.config, "_commit_hash", None),
-                   "param_dtype": str(next(model.parameters()).dtype)}
+    commit = getattr(model.config, "_commit_hash", None) or cached_snapshot(spec.model.pi1_name, spec.model.pi1_revision)
+    return model, {"name": spec.model.pi1_name, "commit": commit, "param_dtype": str(next(model.parameters()).dtype)}
 
 
 def attach_lora(model, spec: SgacSpec, init_seed: int):
