@@ -1,4 +1,4 @@
-  # E0-calibrated SGAC selector: protocol (DRAFT — not frozen, nothing run)
+  # E0-calibrated SGAC selector: protocol (FROZEN as tag `sgac-calib-protocol-v1`, 2026-10-12; no calibration label existed at freeze)
 
   This is a third track. It is separate from the pre-registered signal study (`paper/prereg.md`, tag `prereg-v1`) and from the historical SGAC reproduction (`paper/sgac_repro_protocol.md`, tag `sgac-protocol-v1`). It reads their code, manifests and sieve outputs and writes none of them. It is frozen as tag `sgac-calib-protocol-v1` once the team signs off and before any calibration label exists. After that, changes go only in §13.
 
@@ -29,7 +29,7 @@
   | | Historical reproduction | Calibration (this protocol) | Final evaluation (this protocol) |
   |---|---|---|---|
   | Purpose | Did the published SGAC reproduce? | Learn and validate a selector | Compare curricula |
-  | Status | Done; verdict "could not be reproduced" | Draft | Draft |
+  | Status | Done; verdict "could not be reproduced" | Frozen; not yet run | Frozen; not yet run |
   | Code | `rlvr_v2/sgac/` (frozen) | `rlvr_v2/sgac_calib/` (new) | `rlvr_v2/sgac_calib/` + the frozen SGAC loop |
   | Config / manifests | `configs/sgac/` | `configs/sgac_calib/` | `configs/sgac_calib/` |
   | Evaluation data | MATH-500, test50 | Dev set only (§2) | MATH-500, test50 |
@@ -141,6 +141,10 @@
   - It is the reproduction's `fixed_pi1` arm with the candidate substituted, so the code already exists.
 
   **Label.** ΔA = acc_dev(trained) − acc_dev(base) on the 486-item dev set (greedy, 3072 tokens, `oneshot_rlvr_chat`, math-verify). Per-item outcomes are stored.
+  - **Base reference.** The base model is evaluated on the dev set twice. The first evaluation is the reference for every ΔA.
+  - **Determinism check (E0 G5).** The two evaluations must agree on ≥ 98% of item verdicts, with accuracies within 0.5 pp. Otherwise the pilot queue stops.
+  - **Adapters.** A calibration run keeps only its final adapter and its resume point. The previous adapter is deleted only after the next step is committed, so a crash always resumes from an existing adapter.
+  - **Evaluation sets.** A calibration run is never given MATH-500 or test50, and it evaluates nothing but the dev set at its final step. The CPU smoke asserts this.
 
   **Seeds.** Two training seeds per candidate: 7000 + i and 17000 + i. The label is their mean.
 
@@ -417,7 +421,7 @@
 
   **Before freezing.**
   - Done: the seed count (8) and the historical freeze, with archive hashes.
-  - Remaining: team review of this document and the implementation (branch `sgac-calib`), then tag `sgac-calib-protocol-v1`. No GPU job of this track runs before the tag.
+  - Done 2026-10-12: team review of this document and the implementation (branch `sgac-calib`); approved, including the choices below and the 8-seed plan, subject to the gates and decision rules. Tagged `sgac-calib-protocol-v1`. No GPU job of this track ran before the tag.
 
   **Choices made while implementing (2026-10-12, before any label).** Each one only makes precise something the draft left open:
   - The candidate–dev near-duplicate exclusion (§2).
@@ -427,6 +431,8 @@
   - Monte-Carlo top-1 batches with the loop's tie rule (§5).
   - The crossed-design primary analysis (§7).
   - 40-step schedules read by prefix (§6).
+  - The base dev reference (the first of the two evaluations), the determinism check, and the calibration runs' adapter keeping (§4).
+  - The guard baseline for the historical code is `sgac-repro-frozen`, not `sgac-protocol-v1`, because pre-run fixes landed after v1 (§0).
 
   ## 12. Implementation (branch `sgac-calib`)
 
