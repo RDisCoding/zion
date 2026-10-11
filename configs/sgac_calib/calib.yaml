@@ -1,0 +1,70 @@
+# E0-calibrated SGAC selector track (paper/sgac_calib_protocol.md).
+# Separate from configs/sgac/ (the frozen historical reproduction) and from the prereg configs. The training substrate
+# is the UNCHANGED e0 SGAC spec (configs/sgac/{base,e0}.yaml, hash 577f3319); only its results root is redirected,
+# which the SGAC spec hash excludes. Everything below is identity: it enters calib_hash().
+substrate_profile: e0
+results_root: results_sgac_calib
+
+data:
+  manifest_dir: configs/sgac_calib/manifests
+  near_dup_ratio: 0.8                # conservative; the prereg used 0.9 (protocol section 2)
+  prereg_pool_manifest: manifests/pool.json
+  prereg_heldout_manifest: manifests/heldout.json
+  prereg_ineligible_manifest: manifests/pool_ineligible.json
+  # Workstation paths of the prereg K=32 base sieve (git-ignored); their sha256 is pinned in features.json.
+  sieve_rollouts: results/pool/rollouts.jsonl
+  sieve_signals: results/pool/signals.jsonl
+  # The 22 prereg Study-1 candidates, excluded so Study 1 stays independent (ids frozen in data_roles.json).
+  study1_candidates: manifests/study1_candidates.json
+
+sampling:                            # outcome-blind candidate draw (protocol section 4)
+  rng_seed: 20261010
+  ps_bins: [[0.0, 0.0], [0.0, 0.4], [0.4, 0.8], [0.8, 1.0]]   # {0}, (0, .4], (.4, .8], (.8, 1]
+  pilot_per_bin: 4
+  expansion_per_bin: 8
+
+features:
+  k_deploy: 4                        # the curriculum sieves K=4 rollouts per candidate
+  n_subsamples: 16                   # K=4 subsamples of the 32 stored rollouts per candidate
+  subsample_seed: 20261011
+
+calibration:                         # protocol C1: fresh LoRA + loop.steps SGAC bursts on one candidate
+  seed_offsets: [7000, 17000]        # training seeds = offset + candidate index
+  pi1_seed_offsets: [9000, 19000]    # positive control (diagnostic only)
+  dev_eval_repeats: 2                # base dev eval run twice (determinism check)
+  gate_p: {icc_min: 0.30, sd_min_pp: 1.0}
+
+selector:                            # protocol section 5
+  features: [Ps, Var, D, L]
+  cv_folds: 6
+  cv_repeats: 100
+  inner_folds: 5
+  ridge_alphas: [0.001, 0.00316, 0.01, 0.0316, 0.1, 0.316, 1.0, 3.16, 10.0, 31.6, 100.0, 316.0, 1000.0]
+  # min_leaf_candidates: leaves hold >= 5 CANDIDATES (each contributes n_subsamples rows with one label)
+  gbm: {max_depth: 2, n_estimators: 200, learning_rate: 0.05, subsample: 0.8, min_leaf_candidates: 5}
+  n_bootstrap: 2000
+  n_permutations: 1000
+  perm_cv_repeats: 10                # CV repeats per label shuffle (observed statistic computed the same way)
+  n_mc_batches: 20000                # Monte-Carlo 4-candidate batches for the top-1-of-4 gain
+  alpha_cv_repeats: 10               # inner-CV repeats when choosing the final Ridge alpha on all candidates
+  seed: 0
+  gate_s: {rho_min: 0.30, perm_p_max: 0.05}
+
+curriculum:                          # protocol section 6
+  seeds_min: 6
+  seeds_max: 10
+  first_seed: 42
+  confirmatory_arms: [learned, random, sgac]
+  secondary_arms: [max_var, max_d, max_level]
+  secondary_seeds: [42, 43, 44]
+
+analysis:                            # protocol section 7
+  alpha: 0.05
+  min_effect_pp: 1.0
+  seed_consistency: 0.8333333333333334   # >= 5/6 of seeds, rounded up
+  equivalence_pp: 2.0
+  mde_alpha: 0.025
+  mde_power: 0.80
+  mde_max_pp: 2.0
+  n_boot: 10000
+  boot_seed: 0

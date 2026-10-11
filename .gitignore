@@ -15,3 +15,7 @@ hf_cache/
 *.egg-info/
 build/
 dist/
+results_sgac_calib/
+/sgac_step20_results/
+/sgac_step20_extra/
+/sgac_step20_*.zip
