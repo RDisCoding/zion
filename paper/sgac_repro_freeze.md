@@ -11,7 +11,7 @@ It sits next to the protocol rather than inside it. `paper/sgac_repro_protocol.m
 | Protocol | `paper/sgac_repro_protocol.md` at tag `sgac-protocol-v1` (7b108ba) |
 | Code at report time | branch `sgac-repro`, commit ca4431c |
 | Spec hashes | e0 `577f3319`, as_run `64ba360f` |
-| Report | `report.md`, generated 2026-10-09 00:42 IST, sha256 `aebc0533a0fbe326c85901feb14348c70713140b397a4f511a6f39813ff23328` |
+| Report | `report.md`, generated 2026-10-09 00:42 IST. sha256 with LF line endings, as committed and as generated on Linux: `29eee7891bc0228026c9f3244aea99c86ea38d8fc612f311fcd11e9f6ccb9c43`. The local Windows copy has CRLF endings and hashes to `aebc0533a0fbe326c85901feb14348c70713140b397a4f511a6f39813ff23328`; the content is otherwise identical. |
 | Raw results and report bundle | `sgac_repro_frozen.tar` = `results_sgac/` + `reports/sgac_repro/`, made on the workstation after the queue was confirmed stopped; kept there and not in git. sha256 `76c601aa99bf8d885b0e6cfc796259251666f74944c995295ca403a84e07d636` |
 | Step-20 MATH-500 per-item copies used by the calibration track | `sgac_step20_results/` and `sgac_step20_extra/` (table below). Accuracies match the report exactly under both graders. |
 
