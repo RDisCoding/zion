@@ -36,6 +36,11 @@ Institute SLURM cluster (`scripts/slurm/`): `bash env/setup_cluster.sh`, then `s
 (`bench.sbatch`, `e0_gates.sbatch`, `sieve.sbatch`, `study1_array.sbatch`, `study2_array.sbatch`).
 Re-running any step or re-submitting any array is safe: finished jobs exit immediately, partial ones resume.
 
+## Other tracks
+- SGAC reproduction (frozen): `report.md`, `paper/sgac_repro_protocol.md`, `paper/sgac_repro_freeze.md`.
+- SGAC calibration (calibrated selector): overview with diagrams in `rlvr_v2/sgac_calib/README.md`; rules in
+  `paper/sgac_calib_protocol.md`.
+
 ## Layout
 `rlvr_v2/` package (config, data, prompts, grader, signals, selectors, sampling, sieve, evaluate, train_grpo,
 curriculum, study1, gates, stats, aggregate, cli) · `configs/` · `manifests/` (committed) · `scripts/slurm/` ·

@@ -347,6 +347,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--out", default=None, help="results root of the smoke (default <results_root>/t0_smoke)")
     s = add("jobs", cmd_jobs)
     s.add_argument("--stage", required=True)
+    from .cli_explore import register  # post-G-P rungs and exploratory fits (protocol section 13)
+
+    register(add)
     return ap
 
 

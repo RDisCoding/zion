@@ -10,6 +10,15 @@
 #   STAGES=selector scripts/local/sgac_calib.sh    # CPU: Stage D, gate G-S, freeze + pin the selector
 #   STAGES=curriculum scripts/local/sgac_calib.sh  # only if G-S passed: base eval, all arms, analysis
 #   STAGES=tm scripts/local/sgac_calib.sh          # exploratory time-matched Random
+# After G-P failed on the C1 pilot (protocol section 13), the queue is (one command, ~17 GPU-days):
+#   STAGES=os_pilot,os_expansion,os_selector,os_curriculum,c2 scripts/local/sgac_calib.sh
+#   os_pilot      EXPLORATORY one-shot regime (prereg Study-1 trainer) on the 16 pilot candidates x 2 seeds + pi1 x 2
+#   os_expansion  only if the OS pilot meets the G-P thresholds: 32 more candidates x 2 seeds
+#   os_selector   CPU: Stage D on the OS labels; the selector is frozen whatever G-S says (recorded)
+#   os_curriculum the Stage-E design with that selector (8 seeds learned/random/SGAC, 3 seeds heuristics)
+#   c2            the protocol's pre-declared escalation rung: C1 with 80 bursts, 16 x 2 + pi1 x 2, gate G-P
+# If require-os-gate stops the queue, continue with STAGES=os_selector,os_curriculum,c2 (pre-declared fallback:
+# the equation is then fitted on the 16 OS pilot candidates).
 # Every job is resumable and finished jobs return immediately: re-launch the same command after any interruption.
 # The prereg K=32 sieve must be at results/pool/{rollouts,signals}.jsonl (verified by `check-features`).
 source "$(dirname "$0")/common.sh"
@@ -29,7 +38,7 @@ fi
 is_gate() {
   case "$1" in
     show-spec*|"build-manifests --check"*|check-features*|base-dev-eval*|gate-p*|require-gate-p*|stage-d*|\
-freeze-selector*|require-gate-s*|curriculum-base-eval*) return 0 ;;
+freeze-selector*|require-gate-s*|curriculum-base-eval*|require-os-gate*|explore-curriculum-base-eval*|smoke-rungs*) return 0 ;;
     *) return 1 ;;
   esac
 }

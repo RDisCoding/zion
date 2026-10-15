@@ -10,7 +10,9 @@ from ..artifacts import read_json
 from .manifests import CANDIDATES
 from .spec import CalibSpec
 
-STAGES = ("t0", "audit", "pilot", "expansion", "selector", "curriculum", "tm")
+STAGES = ("t0", "audit", "pilot", "expansion", "selector", "curriculum", "tm",
+          "os_pilot", "os_expansion", "os_selector", "os_curriculum", "c2")
+OS_TAG = "E3_os"  # the exploratory one-shot-regime selector (amendment A3/A4)
 
 
 def _calib_runs(cs: CalibSpec, recs: list[dict]) -> list[str]:
@@ -54,5 +56,35 @@ def stage_jobs(cs: CalibSpec, stage: str) -> list[str]:
         return jobs + ["analyze"]
     if stage == "tm":
         return [f"curriculum-run --arm random_tm --seed {s}" for s in cs.curriculum.secondary_seeds]
+    # ---- after G-P failed on the C1 pilot (protocol section 13) ----
+    if stage in ("os_pilot", "os_expansion"):
+        from .rungs import os_seeds
+
+        recs = cands["pilot"] if stage == "os_pilot" else cands["expansion"]
+        jobs = ["smoke-rungs --gpu"] if stage == "os_pilot" else ["require-os-gate"]
+        jobs += [f"os-run --index {r['index']} --seed {s}" for r in recs for s in os_seeds(int(r["index"]))]
+        if stage == "os_pilot":
+            jobs += [f"os-run --pi1 --seed {s}" for s in os_seeds(None)]
+        return jobs + ["os-labels-gate", "diagnose --source os"]
+    if stage == "os_selector":
+        return [f"fit-explore --source os --tag {OS_TAG} --freeze"]
+    if stage == "os_curriculum":
+        conf = confirmatory_seeds(cs)
+        sec = list(cs.curriculum.secondary_seeds)
+        arms = ["learned", "random", "sgac", "max_var", "max_d", "max_level"]
+
+        def run(a, s):
+            return f"explore-curriculum-run --arm {a} --seed {s}" + (f" --tag {OS_TAG}" if a == "learned" else "")
+
+        jobs = ["explore-curriculum-base-eval"] + [run(a, s) for s in sec for a in arms]
+        jobs += [run(a, s) for s in conf if s not in sec for a in ("learned", "random", "sgac")]
+        return jobs + [f"explore-analyze --tag {OS_TAG}"]
+    if stage == "c2":
+        from .calib import training_seeds
+
+        jobs = [f"c2-run --index {r['index']} --seed {s}" for r in cands["pilot"]
+                for s in training_seeds(cs, int(r["index"]))]
+        jobs += [f"c2-run --pi1 --seed {s}" for s in training_seeds(cs, None)]
+        return jobs + ["c2-labels-gate", "diagnose --source c2", "fit-explore --source c2 --tag E2_c2"]
     raise ValueError(f"unknown stage {stage!r}; expected one of {STAGES}")
 

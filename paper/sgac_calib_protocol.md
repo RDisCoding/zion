@@ -447,4 +447,71 @@
 
   ## 13. Amendments (dated, append-only)
 
-  _None yet._
+  ### A1 · 2026-10-15 · Gate G-P failed on the C1 pilot; the team continues
+
+  **Result.** `results_sgac_calib/calib/gate_p.json` (computed by code, 2026-10-13):
+  - ICC(1,1) = 0.147 (95% CI −0.35 to 0.58), below 0.30.
+  - The SD between candidates is 0.75 pp, below 1.0 pp.
+  - All 16 × 2 runs and π1 × 2 are complete.
+
+  Per §4 the confirmatory track stops at G-P. The team chose to continue, through A2 (the pre-declared rung C2) and the separately labelled exploratory work A3–A5. No threshold is changed.
+
+  **Diagnosis** (`python -m rlvr_v2.sgac_calib diagnose --source c1`, written to `explore/diagnostics_c1.json`):
+  - **No problem-specific effect.** Two seeds of the same problem change the dev items no more alike than runs on different problems. Per-item ΔA correlation is 0.473 within vs 0.466 between (excess 0.007, permutation p = 0.29); flipped-item Jaccard is 0.311 vs 0.303.
+  - **Generic perturbation.** Every run flips the same ~76 fragile dev items (flip rate > 25%), gains and losses roughly balanced, whatever the problem. A run with a single effective update flips 26–46 items. The first AdamW step of every burst moves each trainable weight by about ±lr whatever the gradient's size, and every burst starts a fresh optimiser.
+  - **The dose is random and does not matter.** A group of 4 completions with equal rewards gives exactly zero gradient, so effective updates range 0–99 per run and differ between the seeds of one problem (0 vs 16, 0 vs 21). Corr(effective updates, |ΔA|) = −0.004. Mean ΔA is +0.09 pp with ≥ 50 effective updates and +0.69 pp with fewer.
+  - **Variance.** Between-candidate σ_b = 0.38 pp against seed noise σ_w = 0.92 pp. A perfect selector would gain at most 1.03 × σ_b ≈ 0.39 pp per pick over random, far below the Stage-E MDE (1.82 pp).
+  - **Conclusion.** The C1 target (deployment-dose utility) has no measurable problem-specific component. The C1 equation is unidentifiable from these labels, not merely underpowered.
+
+  ### A2 · 2026-10-15 · Rung C2 (confirmatory, as pre-declared in §4)
+
+  - **Design.** The same 16 pilot candidates × the same 2 seeds + π1 × 2, with 80 bursts (400 updates) instead of 20. The substrate equals e0 except `loop.steps = 80`, enforced by `rungs.require_e0_except`. The label is the same dev-set ΔA against the C1 base reference. Gate G-P is unchanged.
+  - **If G-P passes at C2,** the confirmatory track resumes at C2: expansion, Stage D, G-S and Stage E as in §4–§7, at C2.
+  - **If it fails,** the confirmatory track ends.
+  - C2 is queued after A3–A4 because the A1 diagnosis gives it a low prior: no dose-response at C1. Its result, whichever it is, is reported.
+  - Projected cost: 1.28 h per run, about 44 GPU-h.
+
+  ### A3 · 2026-10-15 · EXPLORATORY: calibration in the validated one-shot regime (OS)
+
+  This is the alternative §4 considered and did not choose: the prereg Study-1 regime.
+
+  **Why this regime.** It is the only regime in this project where training on one problem is known to move held-out accuracy: E0 G4, π1 +5.2 pp [1.6, 8.8] on MATH-500.
+
+  **Design.** Everything is fixed now, before any OS label exists.
+  - **Training.** The unchanged prereg trainer `train_grpo.run_one_shot_grpo`, with prereg Study-1 config hash `84e100e2`: fresh LoRA r32 on all linear layers, 100 rounds × G = 64, lr 2e-5, correctness-only reward, the E0 gates required.
+  - **Label.** Dev-set ΔA, by the same SGAC evaluator against the same C1 base reference.
+  - **Candidates.** The same 48 candidates and the same pilot/expansion split.
+  - **Seeds.** 27000 + i and 37000 + i; π1: 29000 and 39000.
+  - **Gate.** The OS pilot must meet the same thresholds as G-P (ICC ≥ 0.30, SD ≥ 1.0 pp) before the OS expansion runs (`require-os-gate`).
+  - **Pre-declared fallback.** If it does not, the selector is fitted on the 16 OS pilot candidates and the queue continues with `os_selector,os_curriculum,c2`.
+  - **Projected cost.** About 3.3 h per run: about 112 GPU-h for the OS pilot and about 211 for the expansion.
+  - **GPU smoke gate.** The first job of the OS pilot is `smoke-rungs --gpu`: the real model and recipes, with 2 C2 bursts, 2 OS rounds and 64-item dev subsets, in a separate results folder (`t0_rungs`).
+    - If it fails, the queue stops.
+    - Its timings give the measured OS run-time projection.
+
+  ### A4 · 2026-10-15 · EXPLORATORY: selector fit and end-to-end test (tag `E3_os`)
+
+  **Fit.** The Stage-D pipeline of §5, unchanged (models, CV, baselines, permutation test, G-S thresholds), runs on the OS labels.
+  - The fitted selector is frozen *whatever G-S says*. Whether G-S was met is recorded in `explore/E3_os/equation.json` and in the curriculum analysis.
+
+  **End-to-end test.** The Stage-E design of §6–§7, unchanged: the frozen loop on the clean pool, seeds 42–49 for learned / Random / SGAC Eq. 10 and 42–44 for the heuristics, the same crossed analysis, Holm and decision rule.
+  - Results live under `results_sgac_calib/curriculum_explore/`.
+  - Every verdict is labelled exploratory. A "beats" verdict from a selector that failed G-S is reported as unexplained, not as evidence of a validated selector.
+
+  ### A5 · 2026-10-15 · EXPLORATORY fits on existing data
+
+  The Stage-D pipeline, unchanged, applied to:
+  - **the 16 C1 pilot labels** (`E1_c1_pilot`, computed 2026-10-15);
+  - **the C2 labels** (`E2_c2`) once they exist.
+
+  **E1 result.** Ridge α = 1000 (the top of the grid), giving `score = 0.3501 + 0.0644·Ps + 0.0999·Var − 0.0635·D − 0.0233·L` (pp).
+  - Every coefficient's 95% CI includes 0.
+  - Out-of-fold ρ = −0.81 (one-sided permutation p = 0.76); top-1-of-4 gain −0.65 pp [−0.85, −0.33]. G-S is not met.
+  - Strongly negative out-of-fold ρ is the known signature of a label without signal under small-N cross-validation: the intercept-only model scores ρ = −0.96. The permutation test accounts for it.
+  - The baselines are no better: Eq. 10 ρ −0.11, max-Var +0.03, max-level −0.15.
+
+  ### Queue after A1–A5
+
+  `STAGES=os_pilot,os_expansion,os_selector,os_curriculum,c2 scripts/local/sgac_calib.sh`, about 17 GPU-days on one GPU.
+
+  The code is `rlvr_v2/sgac_calib/{rungs,diagnose,explore,explore_curriculum,cli_explore}.py`. The tests are `tests/test_sgac_calib_rungs*.py`.
