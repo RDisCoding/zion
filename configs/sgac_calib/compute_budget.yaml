@@ -1,0 +1,16 @@
+# Equal-GPU-compute comparison: SGAC selection vs Random with the saved compute spent on more training
+# (paper/sgac_calib_protocol.md section 13, amendment A6). Separate from the frozen calibration config.
+stage: compute_budget
+schedule_dir: configs/sgac_calib/compute_budget   # 160-step clean-pool schedules; first steps identical to manifests/
+seeds: [42, 43, 44, 45, 46, 47, 48, 49]           # 8 paired seeds
+sgac_steps: 20                                     # Strategy A: the frozen 20-step SGAC curriculum (Eq. 10 as run)
+random_max_steps: 160                              # Strategy B cap (the budget, not this cap, decides its length)
+random_eval_every: 10                              # test50 every 10 steps for B (A keeps the frozen 5)
+equal_steps_checkpoint: 20                         # B is also evaluated on MATH-500 here (equal-steps comparison)
+decision:
+  alpha: 0.05
+  min_effect_pp: 1.0
+  seed_consistency: 0.875                          # >= 7 of 8 seeds in the winner's direction
+  equivalence_pp: 2.0
+n_boot: 10000
+boot_seed: 0

@@ -11,7 +11,7 @@ from .manifests import CANDIDATES
 from .spec import CalibSpec
 
 STAGES = ("t0", "audit", "pilot", "expansion", "selector", "curriculum", "tm",
-          "os_pilot", "os_expansion", "os_selector", "os_curriculum", "c2")
+          "os_pilot", "os_expansion", "os_selector", "os_curriculum", "c2", "compute_budget")
 OS_TAG = "E3_os"  # the exploratory one-shot-regime selector (amendment A3/A4)
 
 
@@ -86,5 +86,13 @@ def stage_jobs(cs: CalibSpec, stage: str) -> list[str]:
                 for s in training_seeds(cs, int(r["index"]))]
         jobs += [f"c2-run --pi1 --seed {s}" for s in training_seeds(cs, None)]
         return jobs + ["c2-labels-gate", "diagnose --source c2", "fit-explore --source c2 --tag E2_c2"]
+    if stage == "compute_budget":  # amendment A6: the only GPU work after G-P
+        from .compute_budget import load_cb
+
+        cb = load_cb()
+        jobs = ["cb-schedules --check", "cb-smoke --gpu", "cb-base-eval"]
+        for s in cb.seeds:
+            jobs += [f"cb-run --strategy sgac --seed {s}", f"cb-run --strategy random --seed {s}"]
+        return jobs + ["cb-analyze"]
     raise ValueError(f"unknown stage {stage!r}; expected one of {STAGES}")
 

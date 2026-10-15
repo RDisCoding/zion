@@ -10,7 +10,10 @@
 #   STAGES=selector scripts/local/sgac_calib.sh    # CPU: Stage D, gate G-S, freeze + pin the selector
 #   STAGES=curriculum scripts/local/sgac_calib.sh  # only if G-S passed: base eval, all arms, analysis
 #   STAGES=tm scripts/local/sgac_calib.sh          # exploratory time-matched Random
-# After G-P failed on the C1 pilot (protocol section 13), the queue is (one command, ~17 GPU-days):
+# CURRENT PLAN (amendment A6): the equal-compute comparison only, about 1-1.5 GPU-days:
+#   STAGES=compute_budget scripts/local/sgac_calib.sh
+# WITHDRAWN by A6 (never run): the selector-calibration queue below.
+# After G-P failed on the C1 pilot (protocol section 13), the queue was (one command, ~17 GPU-days):
 #   STAGES=os_pilot,os_expansion,os_selector,os_curriculum,c2 scripts/local/sgac_calib.sh
 #   os_pilot      EXPLORATORY one-shot regime (prereg Study-1 trainer) on the 16 pilot candidates x 2 seeds + pi1 x 2
 #   os_expansion  only if the OS pilot meets the G-P thresholds: 32 more candidates x 2 seeds
@@ -38,7 +41,7 @@ fi
 is_gate() {
   case "$1" in
     show-spec*|"build-manifests --check"*|check-features*|base-dev-eval*|gate-p*|require-gate-p*|stage-d*|\
-freeze-selector*|require-gate-s*|curriculum-base-eval*|require-os-gate*|explore-curriculum-base-eval*|smoke-rungs*) return 0 ;;
+freeze-selector*|require-gate-s*|curriculum-base-eval*|require-os-gate*|explore-curriculum-base-eval*|smoke-rungs*|cb-schedules*|cb-smoke*|cb-base-eval*) return 0 ;;
     *) return 1 ;;
   esac
 }

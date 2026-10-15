@@ -166,7 +166,7 @@ def build_report(cs: CalibSpec, out: Path | None = None) -> Path:
     eq10 = " ".join(f"{'+' if c >= 0 else '−'} {abs(c)}·{k}" for k, c in dict(nbm.EQ10_AS_RUN).items()).lstrip("+ ")
     L = ["# SGAC calibration track — report", "",
          (f"_Generated {utc_now()} by `python -m rlvr_v2.sgac_calib report` from `{(R.relative_to(REPO_ROOT) if R.is_relative_to(REPO_ROOT) else R).as_posix()}`. "
-         "Protocol: `paper/sgac_calib_protocol.md` (tag `sgac-calib-protocol-v1`; amendments A1–A5 in §13)._"), "",
+         "Protocol: `paper/sgac_calib_protocol.md` (tag `sgac-calib-protocol-v1`; amendments A1–A6 in §13)._"), "",
          "## 1. Conclusion so far", ""]
     if cur:
         L.append(f"- End-to-end curriculum with `E3_os`: H1/H2 verdicts in §6; outperforms Random and SGAC: "
@@ -174,7 +174,9 @@ def build_report(cs: CalibSpec, out: Path | None = None) -> Path:
     L += [(f"- Fitted equations: {', '.join(t for t in TAGS if eqs[t]) or 'none'}; validated by the G-S thresholds: "
           f"{', '.join(validated) or 'none'}."),
           ("- The deployment-dose (C1) target has no problem-specific component (§3), so the intended C1 equation is "
-          "unidentifiable; the one-shot-regime equation (E3_os) is the closest defensible alternative (amendment A3)."),
+          "unidentifiable. The selector-calibration queue (A2–A4, about 17 GPU-days) was withdrawn by amendment A6 "
+          "before any of it ran: it would cost far more compute than selection could save. The compute question is "
+          "answered by the equal-compute experiment (`reports/sgac_calib/compute_budget_comparison.md`)."),
           ("- A fitted equation is not a validated selector, and a validated selector is not a demonstrated improvement; "
           "each claim below names which of the three it is."), "",
           "## 2. The equations", "",
@@ -224,7 +226,7 @@ def build_report(cs: CalibSpec, out: Path | None = None) -> Path:
     L += ["", "## 7. Reproduce", "", "```bash",
           "python -m rlvr_v2.sgac_calib diagnose --source c1        # and c2, os",
           "python -m rlvr_v2.sgac_calib fit-explore --source c1 --tag E1_c1_pilot",
-          "STAGES=os_pilot,os_expansion,os_selector,os_curriculum,c2 scripts/local/sgac_calib.sh   # GPU queue",
+          "STAGES=compute_budget scripts/local/sgac_calib.sh   # the equal-compute experiment (amendment A6)",
           "python -m rlvr_v2.sgac_calib report", "```", ""]
     out = out or REPORT
     out.parent.mkdir(parents=True, exist_ok=True)

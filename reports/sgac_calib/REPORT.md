@@ -1,11 +1,11 @@
 # SGAC calibration track — report
 
-_Generated 2026-10-15T08:02:06Z by `python -m rlvr_v2.sgac_calib report` from `sgac_results_for_review/results_sgac_calib`. Protocol: `paper/sgac_calib_protocol.md` (tag `sgac-calib-protocol-v1`; amendments A1–A5 in §13)._
+_Generated 2026-10-15T08:57:13Z by `python -m rlvr_v2.sgac_calib report` from `sgac_results_for_review/results_sgac_calib`. Protocol: `paper/sgac_calib_protocol.md` (tag `sgac-calib-protocol-v1`; amendments A1–A6 in §13)._
 
 ## 1. Conclusion so far
 
 - Fitted equations: E1_c1_pilot; validated by the G-S thresholds: none.
-- The deployment-dose (C1) target has no problem-specific component (§3), so the intended C1 equation is unidentifiable; the one-shot-regime equation (E3_os) is the closest defensible alternative (amendment A3).
+- The deployment-dose (C1) target has no problem-specific component (§3), so the intended C1 equation is unidentifiable. The selector-calibration queue (A2–A4, about 17 GPU-days) was withdrawn by amendment A6 before any of it ran: it would cost far more compute than selection could save. The compute question is answered by the equal-compute experiment (`reports/sgac_calib/compute_budget_comparison.md`).
 - A fitted equation is not a validated selector, and a validated selector is not a demonstrated improvement; each claim below names which of the three it is.
 
 ## 2. The equations
@@ -93,6 +93,6 @@ Pending: the end-to-end curriculum has not run yet.
 ```bash
 python -m rlvr_v2.sgac_calib diagnose --source c1        # and c2, os
 python -m rlvr_v2.sgac_calib fit-explore --source c1 --tag E1_c1_pilot
-STAGES=os_pilot,os_expansion,os_selector,os_curriculum,c2 scripts/local/sgac_calib.sh   # GPU queue
+STAGES=compute_budget scripts/local/sgac_calib.sh   # the equal-compute experiment (amendment A6)
 python -m rlvr_v2.sgac_calib report
 ```

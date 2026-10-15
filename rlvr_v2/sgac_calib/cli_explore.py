@@ -10,7 +10,13 @@ One-shot regime OS (exploratory)
 Exploratory fits and diagnostics (CPU)
   fit-explore           the Stage-D pipeline on a rung's labels: --source c1|c2|os --tag T [--freeze]
   diagnose              run- and item-level diagnostics of a rung: --source c1|c2|os
-Exploratory curriculum (GPU)
+Equal-compute comparison (amendment A6; the only GPU work after G-P)
+  cb-schedules          write (or --check) the 160-step clean-pool schedules of seeds 42-49
+  cb-smoke              timing/plumbing check (--gpu on the workstation); never an accuracy result
+  cb-base-eval          base model on MATH-500 + test50 for this experiment (E0 G1 agreement check)
+  cb-run                --strategy sgac|random --seed S (random needs the same seed's sgac run first)
+  cb-analyze            analysis, CSV, plots -> reports/sgac_calib/compute_budget_comparison.md
+Exploratory curriculum (GPU; withdrawn by amendment A6)
   explore-curriculum-base-eval   base model on test50 + MATH-500 for the exploratory curriculum root
   explore-curriculum-run         one arm/seed: --arm learned|random|sgac|max_var|max_d|max_level --seed S [--tag T]
   explore-analyze                H1/H2 analysis for an exploratory selector: --tag T
@@ -184,8 +190,73 @@ def cmd_smoke_rungs(args) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------- equal-compute comparison (amendment A6)
+def cmd_cb_schedules(args) -> int:
+    from .compute_budget import check_schedules, load_cb, write_schedules
+
+    cs, cb = _cs(args), load_cb()
+    if args.check:
+        _print({"schedules_ok": check_schedules(cs, cb)})
+    else:
+        _print({"written": [str(p) for p in write_schedules(cs, cb)], "check": check_schedules(cs, cb)})
+    return 0
+
+
+def cmd_cb_smoke(args) -> int:
+    from .compute_budget import run_cb_smoke
+
+    cs = _cs(args)
+    out = Path(args.out) if args.out else cs.results_dir / ("t0_cb" if args.gpu else "t0_cb_cpu")
+    s = run_cb_smoke(out, gpu=args.gpu)
+    _print({k: v for k, v in s.items() if k != "analysis_rows"})
+    return 0
+
+
+def cmd_cb_base_eval(args) -> int:
+    from ..sgac.jobs import Context, run_base_eval
+    from .compute_budget import _ctx, load_cb, spec_a
+
+    cs, cb = _cs(args), load_cb()
+    sa = spec_a(cs, cb)
+    ctx = _ctx(cs, sa)
+    res = run_base_eval(sa, Context(spec=sa, test50=ctx.test50, math500=ctx.math500, grader=ctx.grader))
+    agree = res.get("e0_g1_agreement") or {}
+    _print({"test50": res["test50"]["acc"], "math500": (res.get("math500") or {}).get("acc"), "e0_g1": agree})
+    return EXIT_GATE_FAILED if agree.get("passed") is False else 0
+
+
+def cmd_cb_run(args) -> int:
+    from .compute_budget import load_cb, run_strategy
+
+    cs, cb = _cs(args), load_cb()
+    if args.seed not in cb.seeds:
+        raise SystemExit(f"seed {args.seed} is not one of the pre-declared seeds {list(cb.seeds)}")
+    st = run_strategy(cs, cb, args.strategy, args.seed)
+    _print({"strategy": args.strategy, "seed": args.seed, "step_done": st["step_done"],
+            "budget_stop": st.get("budget_stop"), "evals": st["evals"]})
+    return 0
+
+
+def cmd_cb_analyze(args) -> int:
+    from .compute_budget import analyze, load_cb
+
+    res = analyze(_cs(args), load_cb())
+    _print({k: res.get(k) for k in ("seeds_complete", "primary", "interpretation", "compute")})
+    return 0
+
+
 def register(add) -> None:
     add("report", cmd_report)
+    s = add("cb-schedules", cmd_cb_schedules)
+    s.add_argument("--check", action="store_true")
+    s = add("cb-smoke", cmd_cb_smoke)
+    s.add_argument("--gpu", action="store_true")
+    s.add_argument("--out", default=None)
+    add("cb-base-eval", cmd_cb_base_eval)
+    s = add("cb-run", cmd_cb_run)
+    s.add_argument("--strategy", required=True, choices=["sgac", "random"])
+    s.add_argument("--seed", type=int, required=True)
+    add("cb-analyze", cmd_cb_analyze)
     s = add("smoke-rungs", cmd_smoke_rungs)
     s.add_argument("--gpu", action="store_true")
     s.add_argument("--out", default=None)

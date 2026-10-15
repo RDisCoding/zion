@@ -510,7 +510,43 @@
   - Strongly negative out-of-fold ρ is the known signature of a label without signal under small-N cross-validation: the intercept-only model scores ρ = −0.96. The permutation test accounts for it.
   - The baselines are no better: Eq. 10 ρ −0.11, max-Var +0.03, max-level −0.15.
 
-  ### Queue after A1–A5
+  ### A6 · 2026-10-15 · The calibration queue is withdrawn; one equal-compute experiment replaces it
+
+  **Withdrawn, never run.** A2 (C2), A3 (OS calibration) and A4 (exploratory curriculum).
+  - The project's aim is accuracy per unit of compute. Calibrating a selector would cost about 17 GPU-days before any model is trained.
+  - The pilot already shows the best possible selection gain is ≈ 0.39 pp per pick.
+  - At T0, screening one step's candidates cost 2.9× the training on the pick (85 s vs 29 s).
+  - The code stays in the repository, unused.
+
+  **Question.** Does spending compute on selecting training problems improve final accuracy more than spending the same compute on more Random-selected training?
+
+  **Design** (`configs/sgac_calib/compute_budget.yaml`, `rlvr_v2/sgac_calib/compute_budget.py`). Fixed now, before any run.
+  - **Strategy A (SGAC).** The frozen 20-step curriculum (`sgac` arm, Eq. 10 as run, screening of 4 candidates × K = 4 every step) on the e0 substrate (hash `577f3319`), the clean pool, seeds 42–49.
+  - **Strategy B (Random, no screening).** The same seed's batches and the random arm's RNG stream. Its first 20 picks equal the Random arm's. It runs on the same substrate except `loop.steps = 160` (a cap) and test50 every 10 steps.
+  - **Budget.** The per-seed budget is A's *measured* training-side GPU time: the sum over A's steps of screening + burst + adapter-save wall time. B runs step t+1 only while `used + mean step cost so far ≤ budget`, so it never knowingly exceeds A. The realised ratio and any cap hit are recorded. Model loading and evaluation are identical and reported separately.
+  - **Schedules.** `configs/sgac_calib/compute_budget/batches_seed{42..49}.json`, 160 steps. Their first 40 batches are identical to the frozen calibration schedules (checked by `cb-schedules --check`).
+  - **Order and checks.** Per seed, A then B. The queue starts with a GPU timing and plumbing check (`cb-smoke --gpu`, never an accuracy claim) and the base evaluation, which includes the E0 G1 agreement check. Both are gates.
+  - **Evaluation.** MATH-500, greedy, at step 0 (shared base), A at 20, and B at 20 and at its final budget-matched step. test50 is used for trajectories.
+
+  **Analysis.**
+  - **Primary:** B(final) − A(20) on MATH-500, the crossed seed × item test of §7 over the 8 paired seeds. It is a single comparison, so no Holm correction.
+    - "B better" or "A better" needs p < 0.05, |Δ| ≥ 1 pp and the winner's sign in ≥ 7 of 8 seeds.
+    - "Equivalent" needs the 90% CI inside ±2 pp.
+    - Otherwise the result is "inconclusive".
+  - **Interpretation, fixed now:**
+    - B better: switch to Random.
+    - Equivalent: SGAC's overhead is not justified, so prefer Random.
+    - A better: retain SGAC (the only outcome that would justify resuming selector work).
+    - Inconclusive: neither is supported.
+  - **Secondary:** B(20) − A(20) at equal steps; B(final) − B(20), i.e. what the extra training buys; each strategy vs base. Pigeonhole and item bootstraps are reported as sensitivity analyses.
+  - **Report:** per-seed accuracies and measured GPU-hours, accuracy against actual compute, deviations and failures.
+  - **Outputs:** `reports/sgac_calib/compute_budget_comparison.md`, `compute_budget_seeds.csv`, `compute_budget_results.json` and the figures.
+
+  **Cost.** About 1–1.5 GPU-days: 8 × (A ≈ 1.3 h + B ≈ 1.9 h with two MATH-500 evaluations), plus base eval and timing check.
+
+  **Run.** `STAGES=compute_budget scripts/local/sgac_calib.sh`
+
+  ### Queue after A1–A5 (withdrawn by A6)
 
   `STAGES=os_pilot,os_expansion,os_selector,os_curriculum,c2 scripts/local/sgac_calib.sh`, about 17 GPU-days on one GPU.
 

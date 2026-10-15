@@ -13,15 +13,12 @@ The rules are frozen in [`paper/sgac_calib_protocol.md`](../../paper/sgac_calib_
 >   no more than runs on different problems, so there is no problem-specific usefulness to learn.
 > - The equation fitted on those labels (E1) has no predictive validity.
 >
-> The queue continues as follows:
+> **Current plan (amendment A6).** Calibrating a selector would cost about 17 GPU-days before any model is
+> trained, which defeats the purpose: accuracy per unit of compute. That queue is withdrawn and never ran.
 >
-> 1. The protocol's pre-declared rung C2 (4× training).
-> 2. An **exploratory** calibration in the one-shot regime whose positive control is known to work: the prereg
->    Study-1 trainer, groups of 64.
-> 3. A selector fitted on those labels and tested end to end in the curriculum below.
->
-> One command runs it all:
-> `STAGES=os_pilot,os_expansion,os_selector,os_curriculum,c2 scripts/local/sgac_calib.sh`.
+> One experiment (about 1–1.5 GPU-days) replaces it. SGAC (20 steps, with screening) is compared with Random given the
+> same measured GPU time and no screening, spending it on more training steps. 8 paired seeds, MATH-500:
+> `STAGES=compute_budget scripts/local/sgac_calib.sh` → `reports/sgac_calib/compute_budget_comparison.md`.
 
 ## 1. The pipeline
 
